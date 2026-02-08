@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, User, Zap, Scale, Activity, Calendar, Ruler } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { BiometricData } from '../services/api'
+import { Button } from '../components/UI/Button'
+import { FormField } from '../components/UI/FormField'
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1)
@@ -115,26 +117,23 @@ const Register: React.FC = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-pink-50 to-sky-50 flex items-center justify-center px-4 py-12">"
-      <div className="w-full max-w-md">
-        {/* Logo and Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-violet-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
-              </div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-br from-pink-500 to-sky-400 rounded-full"></div>
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Join{' '}
-            <span className="gradient-text animate-gradient">NovaFitness</span>
+    <div className="login-container">
+      {/* Logo */}
+      <div className="login-logo">
+        <Zap className="w-8 h-8 text-white" />
+      </div>
+
+      {/* Main Content */}
+      <div className="login-content">
+        {/* Header */}
+        <div className="login-header">
+          <h1 className="login-title">
+            <span className="login-title-brand">NovaFitness</span>
           </h1>
-          <p className="text-gray-600">
+          <p className="login-subtitle">
             {step === 1 
-              ? 'Create your account to get started' 
-              : 'Complete your profile for personalized insights'
+              ? 'Crea tu cuenta para comenzar' 
+              : 'Completa tu perfil para obtener información personalizada'
             }
           </p>
         </div>
@@ -142,272 +141,217 @@ const Register: React.FC = () => {
         {/* Progress Indicator */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-violet-600">
-              Step {step} of 2
+            <span className="text-sm font-medium text-white">
+              Paso {step} de 2
             </span>
-            <span className="text-sm text-gray-500">
-              {step === 1 ? 'Account Details' : 'Biometric Profile'}
+            <span className="text-sm text-gray-300">
+              {step === 1 ? '- Detalles de la cuenta' : '- Perfil biométrico'}
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-700 bg-opacity-30 rounded-full h-2">
             <div 
-              className="bg-gradient-to-r from-violet-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+              className="bg-white bg-opacity-40 h-2 rounded-full transition-all duration-300"
               style={{ width: `${(step / 2) * 100}%` }}
             ></div>
           </div>
         </div>
 
         {/* Registration Form */}
-        <div className="card fade-in">
+        <form onSubmit={step === 1 ? handleStep1Submit : handleStep2Submit} className="login-form">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="error-message">{error}</p>
+            <div className="login-error">
+              <p className="text-red-300 text-sm text-center">{error}</p>
             </div>
           )}
 
           {step === 1 ? (
-            <form onSubmit={handleStep1Submit} className="space-y-6">
+            <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label htmlFor="firstName" className="form-label">
-                    First Name
-                  </label>
-                  <input
-                    id="firstName"
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="input"
-                    placeholder="John"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="lastName" className="form-label">
-                    Last Name
-                  </label>
-                  <input
-                    id="lastName"
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="input"
-                    placeholder="Doe"
-                  />
-                </div>
+                <FormField
+                  id="firstName"
+                  label="Nombre"
+                  type="text"
+                  value={firstName}
+                  onChange={(value) => setFirstName(value)}
+                  icon={<User className="w-5 h-5" />}
+                />
+                <FormField
+                  id="lastName"
+                  label="Apellido"
+                  type="text"
+                  value={lastName}
+                  onChange={(value) => setLastName(value)}
+                  icon={<User className="w-5 h-5" />}
+                />
               </div>
 
-              <div className="form-group">
-                <label htmlFor="email" className="form-label">
-                  Email Address <span className="required">*</span>
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="input pl-10"
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-              </div>
+              <FormField
+                id="email"
+                label="Correo Electrónico"
+                type="email"
+                value={email}
+                onChange={(value) => setEmail(value)}
+                icon={<Mail className="w-5 h-5" />}
+                placeholder="Introduce tu correo electrónico"
+                required
+              />
 
-              <div className="form-group">
-                <label htmlFor="password" className="form-label">
-                  Password <span className="required">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input pl-10 pr-10"
-                    placeholder="Create a password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
+              <FormField
+                id="password"
+                label="Contraseña"
+                type="password"
+                value={password}
+                onChange={(value) => setPassword(value)}
+                icon={<Lock className="w-5 h-5" />}
+                placeholder="Crea una contraseña"
+                showPasswordToggle
+                required
+              />
 
-              <div className="form-group">
-                <label htmlFor="confirmPassword" className="form-label">
-                  Confirm Password <span className="required">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="input pl-10"
-                    placeholder="Confirm your password"
-                    required
-                  />
-                </div>
-              </div>
+              <FormField
+                id="confirmPassword"
+                label="Confirmar Contraseña"
+                type="password"
+                value={confirmPassword}
+                onChange={(value) => setConfirmPassword(value)}
+                icon={<Lock className="w-5 h-5" />}
+                placeholder="Confirma tu contraseña"
+                required
+              />
 
-              <button type="submit" className="btn btn-primary w-full">
-                Continue to Profile Setup
-              </button>
-            </form>
+              <Button type="submit" className="w-full">
+                Continuar a Configuración de Perfil
+              </Button>
+            </div>
           ) : (
-            <form onSubmit={handleStep2Submit} className="space-y-6">
+            <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label htmlFor="age" className="form-label">
-                    Age <span className="required">*</span>
+                <FormField
+                  id="age"
+                  label="Age"
+                  type="number"
+                  value={age}
+                  onChange={(value) => setAge(value)}
+                  icon={<Calendar className="w-5 h-5" />}
+                  placeholder="25"
+                  min={13}
+                  max={120}
+                  required
+                />
+
+                <div className="login-field">
+                  <label htmlFor="gender" className="login-label">
+                    Género *
                   </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      id="age"
-                      type="number"
-                      min="13"
-                      max="120"
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                      className="input pl-10"
-                      placeholder="25"
+                  <div className="login-input-container">
+                    <div className="login-input-icon">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <select
+                      id="gender"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                      className="login-input"
                       required
-                    />
+                    >
+                      <option value="">Selecciona</option>
+                      <option value="male">Masculino</option>
+                      <option value="female">Femenino</option>
+                    </select>
                   </div>
                 </div>
+              </div>
 
-                <div className="form-group">
-                  <label htmlFor="gender" className="form-label">
-                    Gender <span className="required">*</span>
-                  </label>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  id="weight"
+                  label="Peso (kg)"
+                  type="number"
+                  value={weight}
+                  onChange={(value) => setWeight(value)}
+                  icon={<Scale className="w-5 h-5" />}
+                  placeholder="70"
+                  min={30}
+                  max={300}
+                  step={0.1}
+                  required
+                />
+
+                <FormField
+                  id="height"
+                  label="Altura (cm)"
+                  type="number"
+                  value={height}
+                  onChange={(value) => setHeight(value)}
+                  icon={<Ruler className="w-5 h-5" />}
+                  placeholder="175"
+                  min={100}
+                  max={250}
+                  step={0.1}
+                  required
+                />
+              </div>
+
+              <div className="login-field">
+                <label htmlFor="activityLevel" className="login-label">
+                  Nivel de Actividad *
+                </label>
+                <div className="login-input-container">
+                  <div className="login-input-icon">
+                    <Activity className="w-5 h-5" />
+                  </div>
                   <select
-                    id="gender"
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                    className="select"
+                    id="activityLevel"
+                    value={activityLevel}
+                    onChange={(e) => setActivityLevel(e.target.value)}
+                    className="login-input"
                     required
                   >
-                    <option value="">Select</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
+                    <option value="">Selecciona tu nivel de actividad</option>
+                    {activityLevels.map((level) => (
+                      <option key={level.value} value={level.value}>
+                        {level.label} - {level.desc}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-group">
-                  <label htmlFor="weight" className="form-label">
-                    Weight (kg) <span className="required">*</span>
-                  </label>
-                  <div className="relative">
-                    <Scale className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      id="weight"
-                      type="number"
-                      min="30"
-                      max="300"
-                      step="0.1"
-                      value={weight}
-                      onChange={(e) => setWeight(e.target.value)}
-                      className="input pl-10"
-                      placeholder="70"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="height" className="form-label">
-                    Height (cm) <span className="required">*</span>
-                  </label>
-                  <div className="relative">
-                    <Ruler className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                    <input
-                      id="height"
-                      type="number"
-                      min="100"
-                      max="250"
-                      step="0.1"
-                      value={height}
-                      onChange={(e) => setHeight(e.target.value)}
-                      className="input pl-10"
-                      placeholder="175"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="activityLevel" className="form-label">
-                  Activity Level <span className="required">*</span>
-                </label>
-                <select
-                  id="activityLevel"
-                  value={activityLevel}
-                  onChange={(e) => setActivityLevel(e.target.value)}
-                  className="select"
-                  required
-                >
-                  <option value="">Select your activity level</option>
-                  {activityLevels.map((level) => (
-                    <option key={level.value} value={level.value}>
-                      {level.label} - {level.desc}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="flex gap-3">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => setStep(1)}
-                  className="btn btn-secondary flex-1"
                   disabled={isLoading}
+                  className="flex-1"
                 >
-                  Back
-                </button>
-                <button
+                  Atrás
+                </Button>
+                <Button
                   type="submit"
                   disabled={isLoading}
-                  className="btn btn-primary flex-1"
+                  isLoading={isLoading}
+                  icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
+                  className="flex-1"
                 >
-                  {isLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4" />
-                      Complete Setup
-                    </>
-                  )}
-                </button>
+                  {isLoading ? 'Creando...' : 'Completar Configuración'}
+                </Button>
               </div>
-            </form>
+            </div>
           )}
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-center text-gray-600">
-              Already have an account?{' '}
+          <div className="login-register">
+            <p className="login-register-text">
+              ¿Ya tienes una cuenta?{' '}
               <Link
                 to="/login"
-                className="text-violet-600 hover:text-violet-700 font-medium"
+                className="login-register-link"
               >
-                Sign in here
+                Inicia sesión aquí
               </Link>
             </p>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   )

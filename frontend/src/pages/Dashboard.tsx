@@ -16,6 +16,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { BiometricData } from '../services/api'
+import { Button } from '../components/UI/Button'
+import { FormField } from '../components/UI/FormField'
 
 const Dashboard: React.FC = () => {
   const { user, logout, updateBiometrics } = useAuth()
@@ -91,67 +93,63 @@ const Dashboard: React.FC = () => {
   const needsProfile = !user?.age || !user?.gender || !user?.weight || !user?.height || !user?.activity_level
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-violet-50 via-pink-50 to-sky-50">
+    <div className="login-container">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  <span className="gradient-text">NovaFitness</span>
-                </h1>
-                <p className="text-sm text-gray-500">
-                  Welcome back, {user?.first_name || user?.email}!
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={logout}
-              className="btn btn-ghost"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          </div>
-        </div>
+      <div className="login-logo">
+        <Zap className="w-8 h-8 text-white" />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="login-content">
+        {/* Header */}
+        <div className="login-header mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="login-title">
+                <span className="login-title-brand">NovaFitness</span>
+              </h1>
+              <p className="login-subtitle">
+                Welcome back, {user?.first_name || user?.email}!
+              </p>
+            </div>
+            <Button
+              onClick={logout}
+              variant="ghost"
+              icon={<LogOut className="w-4 h-4" />}
+            >
+              Logout
+            </Button>
+          </div>
+        </div>
         {/* Alerts */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="error-message">{error}</p>
+          <div className="login-error mb-6">
+            <p className="text-red-300 text-sm text-center">{error}</p>
           </div>
         )}
         
         {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="success-message">{success}</p>
+          <div className="mb-6 bg-green-500 bg-opacity-20 backdrop-blur-sm border border-green-400 border-opacity-30 rounded-lg p-4">
+            <p className="text-green-300 text-sm text-center">{success}</p>
           </div>
         )}
 
         {/* Profile Setup Notice */}
         {needsProfile && !isEditing && (
-          <div className="mb-6 card-gradient rounded-xl p-6 text-white">
+          <div className="mb-6 bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6">
             <div className="flex items-start space-x-4">
-              <Target className="w-6 h-6 mt-1 flex-shrink-0" />
+              <Target className="w-6 h-6 mt-1 flex-shrink-0 text-white" />
               <div className="flex-1">
-                <h3 className="font-semibold text-lg mb-2">Complete Your Profile</h3>
-                <p className="text-white/90 mb-4">
+                <h3 className="font-semibold text-lg mb-2 text-white">Complete Your Profile</h3>
+                <p className="text-gray-300 mb-4">
                   Add your biometric information to get personalized BMR and TDEE calculations for better fitness insights.
                 </p>
-                <button
+                <Button
                   onClick={startEdit}
-                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/20 
-                           text-white px-4 py-2 rounded-lg font-medium transition-all duration-200"
+                  variant="ghost"
+                  icon={<Edit3 className="w-4 h-4" />}
                 >
-                  <Edit3 className="w-4 h-4 inline mr-2" />
                   Complete Profile
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -160,135 +158,133 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profile Card */}
           <div className="lg:col-span-1">
-            <div className="card">
+            <div className="bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-violet-600" />
+                <h2 className="text-lg font-semibold text-white flex items-center">
+                  <User className="w-5 h-5 mr-2" />
                   Profile
                 </h2>
                 {!needsProfile && !isEditing && (
-                  <button
+                  <Button
                     onClick={startEdit}
-                    className="btn btn-ghost text-sm"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
+                    variant="ghost"
+                    icon={<Edit3 className="w-4 h-4" />}
+                  />
                 )}
               </div>
 
               {isEditing ? (
                 <form onSubmit={handleEditSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Age</label>
-                      <input
-                        type="number"
-                        min="13"
-                        max="120"
-                        value={editData.age}
-                        onChange={(e) => setEditData(prev => ({...prev, age: e.target.value}))}
-                        className="input"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Gender</label>
-                      <select
-                        value={editData.gender}
-                        onChange={(e) => setEditData(prev => ({...prev, gender: e.target.value}))}
-                        className="select"
-                        required
-                      >
-                        <option value="">Select</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                      </select>
+                    <FormField
+                      id="age"
+                      label="Age"
+                      type="number"
+                      value={editData.age}
+                      onChange={(value) => setEditData(prev => ({...prev, age: value}))}
+                      icon={<Calendar className="w-4 h-4" />}
+                      min={13}
+                      max={120}
+                      required
+                    />
+                    <div className="login-field">
+                      <label className="login-label">Gender</label>
+                      <div className="login-input-container">
+                        <div className="login-input-icon">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <select
+                          value={editData.gender}
+                          onChange={(e) => setEditData(prev => ({...prev, gender: e.target.value}))}
+                          className="login-input"
+                          required
+                        >
+                          <option value="">Select</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="form-label">Weight (kg)</label>
-                      <input
-                        type="number"
-                        min="30"
-                        max="300"
-                        step="0.1"
-                        value={editData.weight}
-                        onChange={(e) => setEditData(prev => ({...prev, weight: e.target.value}))}
-                        className="input"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Height (cm)</label>
-                      <input
-                        type="number"
-                        min="100"
-                        max="250"
-                        step="0.1"
-                        value={editData.height}
-                        onChange={(e) => setEditData(prev => ({...prev, height: e.target.value}))}
-                        className="input"
-                        required
-                      />
-                    </div>
+                    <FormField
+                      id="weight"
+                      label="Weight (kg)"
+                      type="number"
+                      value={editData.weight}
+                      onChange={(value) => setEditData(prev => ({...prev, weight: value}))}
+                      icon={<Scale className="w-4 h-4" />}
+                      min={30}
+                      max={300}
+                      step={0.1}
+                      required
+                    />
+                    <FormField
+                      id="height"
+                      label="Height (cm)"
+                      type="number"
+                      value={editData.height}
+                      onChange={(value) => setEditData(prev => ({...prev, height: value}))}
+                      icon={<Ruler className="w-4 h-4" />}
+                      min={100}
+                      max={250}
+                      step={0.1}
+                      required
+                    />
                   </div>
 
-                  <div>
-                    <label className="form-label">Activity Level</label>
-                    <select
-                      value={editData.activity_level}
-                      onChange={(e) => setEditData(prev => ({...prev, activity_level: e.target.value}))}
-                      className="select"
-                      required
-                    >
-                      <option value="">Select activity level</option>
-                      {activityLevels.map((level) => (
-                        <option key={level.value} value={level.value}>
-                          {level.label} - {level.desc}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="login-field">
+                    <label className="login-label">Activity Level</label>
+                    <div className="login-input-container">
+                      <div className="login-input-icon">
+                        <Activity className="w-4 h-4" />
+                      </div>
+                      <select
+                        value={editData.activity_level}
+                        onChange={(e) => setEditData(prev => ({...prev, activity_level: e.target.value}))}
+                        className="login-input"
+                        required
+                      >
+                        <option value="">Select activity level</option>
+                        {activityLevels.map((level) => (
+                          <option key={level.value} value={level.value}>
+                            {level.label} - {level.desc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="flex gap-2 pt-4">
-                    <button
+                    <Button
                       type="submit"
                       disabled={isLoading}
-                      className="btn btn-primary flex-1 text-sm"
+                      isLoading={isLoading}
+                      icon={!isLoading ? <Save className="w-3 h-3" /> : undefined}
+                      className="flex-1 text-sm"
                     >
-                      {isLoading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-3 h-3" />
-                          Save
-                        </>
-                      )}
-                    </button>
-                    <button
+                      {isLoading ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
                       type="button"
                       onClick={cancelEdit}
                       disabled={isLoading}
-                      className="btn btn-secondary text-sm"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                      variant="secondary"
+                      icon={<X className="w-3 h-3" />}
+                      className="text-sm"
+                    />
                   </div>
                 </form>
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600">Email</span>
-                    <span className="font-medium">{user?.email}</span>
+                    <span className="text-white text-opacity-80">Email</span>
+                    <span className="text-white font-medium">{user?.email}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600">Name</span>
-                    <span className="font-medium">
+                    <span className="text-white text-opacity-80">Name</span>
+                    <span className="text-white font-medium">
                       {user?.first_name || user?.last_name 
                         ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
                         : 'Not set'
@@ -296,36 +292,36 @@ const Dashboard: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600 flex items-center">
+                    <span className="text-white text-opacity-80 flex items-center">
                       <Calendar className="w-4 h-4 mr-1" />
                       Age
                     </span>
-                    <span className="font-medium">{user?.age || 'Not set'}</span>
+                    <span className="text-white font-medium">{user?.age || 'Not set'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600">Gender</span>
-                    <span className="font-medium capitalize">{user?.gender || 'Not set'}</span>
+                    <span className="text-white text-opacity-80">Gender</span>
+                    <span className="text-white font-medium capitalize">{user?.gender || 'Not set'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600 flex items-center">
+                    <span className="text-white text-opacity-80 flex items-center">
                       <Scale className="w-4 h-4 mr-1" />
                       Weight
                     </span>
-                    <span className="font-medium">{user?.weight ? `${user.weight} kg` : 'Not set'}</span>
+                    <span className="text-white font-medium">{user?.weight ? `${user.weight} kg` : 'Not set'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600 flex items-center">
+                    <span className="text-white text-opacity-80 flex items-center">
                       <Ruler className="w-4 h-4 mr-1" />
                       Height
                     </span>
-                    <span className="font-medium">{user?.height ? `${user.height} cm` : 'Not set'}</span>
+                    <span className="text-white font-medium">{user?.height ? `${user.height} cm` : 'Not set'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-gray-600 flex items-center">
+                    <span className="text-white text-opacity-80 flex items-center">
                       <Activity className="w-4 h-4 mr-1" />
                       Activity
                     </span>
-                    <span className="font-medium">
+                    <span className="text-white font-medium">
                       {user?.activity_level ? getActivityLevelLabel(user.activity_level) : 'Not set'}
                     </span>
                   </div>
@@ -338,30 +334,30 @@ const Dashboard: React.FC = () => {
           <div className="lg:col-span-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* BMR Card */}
-              <div className="card">
+              <div className="bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <Target className="w-5 h-5 mr-2 text-pink-500" />
+                  <h3 className="text-lg font-semibold text-white flex items-center">
+                    <Target className="w-5 h-5 mr-2" />
                     BMR
                   </h3>
-                  <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
-                    <Target className="w-4 h-4 text-pink-500" />
+                  <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                    <Target className="w-4 h-4 text-white" />
                   </div>
                 </div>
                 {user?.bmr ? (
                   <>
-                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                    <div className="text-3xl font-bold text-white mb-2">
                       {Math.round(user.bmr)}
-                      <span className="text-lg text-gray-500 font-normal ml-1">cal/day</span>
+                      <span className="text-lg text-white text-opacity-60 font-normal ml-1">cal/day</span>
                     </div>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-white text-opacity-70 text-sm">
                       Basal Metabolic Rate - Calories your body burns at rest
                     </p>
                   </>
                 ) : (
                   <div className="text-center py-8">
-                    <Target className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">
+                    <Target className="w-12 h-12 text-white text-opacity-40 mx-auto mb-3" />
+                    <p className="text-white text-opacity-60 text-sm">
                       Complete your profile to see your BMR calculation
                     </p>
                   </div>
@@ -369,30 +365,30 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* TDEE Card */}
-              <div className="card">
+              <div className="bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <TrendingUp className="w-5 h-5 mr-2 text-sky-500" />
+                  <h3 className="text-lg font-semibold text-white flex items-center">
+                    <TrendingUp className="w-5 h-5 mr-2" />
                     TDEE
                   </h3>
-                  <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-sky-500" />
+                  <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-white" />
                   </div>
                 </div>
                 {user?.tdee ? (
                   <>
-                    <div className="text-3xl font-bold text-gray-900 mb-2">
+                    <div className="text-3xl font-bold text-white mb-2">
                       {Math.round(user.tdee)}
-                      <span className="text-lg text-gray-500 font-normal ml-1">cal/day</span>
+                      <span className="text-lg text-white text-opacity-60 font-normal ml-1">cal/day</span>
                     </div>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-white text-opacity-70 text-sm">
                       Total Daily Energy Expenditure - Including your activity level
                     </p>
                   </>
                 ) : (
                   <div className="text-center py-8">
-                    <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">
+                    <TrendingUp className="w-12 h-12 text-white text-opacity-40 mx-auto mb-3" />
+                    <p className="text-white text-opacity-60 text-sm">
                       Complete your profile to see your TDEE calculation
                     </p>
                   </div>
@@ -401,32 +397,32 @@ const Dashboard: React.FC = () => {
 
               {/* Calorie Zones Card */}
               {user?.tdee && (
-                <div className="card md:col-span-2">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <Activity className="w-5 h-5 mr-2 text-violet-500" />
+                <div className="bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6 md:col-span-2">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                    <Activity className="w-5 h-5 mr-2" />
                     Daily Calorie Zones
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-red-50 rounded-lg p-4 border border-red-100">
-                      <div className="text-sm font-medium text-red-700 mb-1">Weight Loss</div>
-                      <div className="text-xl font-bold text-red-600">
+                    <div className="bg-red-500 bg-opacity-20 backdrop-blur-sm border border-red-300 border-opacity-30 rounded-lg p-4">
+                      <div className="text-sm font-medium text-red-200 mb-1">Weight Loss</div>
+                      <div className="text-xl font-bold text-white">
                         {Math.round(user.tdee - 500)}
                       </div>
-                      <div className="text-xs text-red-600">-500 cal/day</div>
+                      <div className="text-xs text-red-200">-500 cal/day</div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                      <div className="text-sm font-medium text-green-700 mb-1">Maintenance</div>
-                      <div className="text-xl font-bold text-green-600">
+                    <div className="bg-green-500 bg-opacity-20 backdrop-blur-sm border border-green-300 border-opacity-30 rounded-lg p-4">
+                      <div className="text-sm font-medium text-green-200 mb-1">Maintenance</div>
+                      <div className="text-xl font-bold text-white">
                         {Math.round(user.tdee)}
                       </div>
-                      <div className="text-xs text-green-600">Your TDEE</div>
+                      <div className="text-xs text-green-200">Your TDEE</div>
                     </div>
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                      <div className="text-sm font-medium text-blue-700 mb-1">Weight Gain</div>
-                      <div className="text-xl font-bold text-blue-600">
+                    <div className="bg-blue-500 bg-opacity-20 backdrop-blur-sm border border-blue-300 border-opacity-30 rounded-lg p-4">
+                      <div className="text-sm font-medium text-blue-200 mb-1">Weight Gain</div>
+                      <div className="text-xl font-bold text-white">
                         {Math.round(user.tdee + 500)}
                       </div>
-                      <div className="text-xs text-blue-600">+500 cal/day</div>
+                      <div className="text-xs text-blue-200">+500 cal/day</div>
                     </div>
                   </div>
                 </div>

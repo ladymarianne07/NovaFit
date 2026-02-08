@@ -40,12 +40,11 @@ const Login: React.FC = () => {
       <div className="login-content">
         {/* Header */}
         <div className="login-header">
-          <h1 className="login-title">
-            Welcome to{' '}
+          <h1 className="login-title"> 
             <span className="login-title-brand">NovaFitness</span>
           </h1>
           <p className="login-subtitle">
-            Transform your fitness journey with personalized insights
+            Transforma tu camino hacia una vida más saludable
           </p>
         </div>
 
@@ -60,7 +59,7 @@ const Login: React.FC = () => {
           {/* Email Field */}
           <div className="login-field">
             <label htmlFor="email" className="login-label">
-              Email Address
+              Dirección de correo electrónico
             </label>
             <div className="login-input-container">
               <Mail className="login-input-icon" />
@@ -70,7 +69,6 @@ const Login: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="login-input"
-                placeholder="exoxygene@gmail.com"
                 required
                 disabled={isLoading}
               />
@@ -80,7 +78,7 @@ const Login: React.FC = () => {
           {/* Password Field */}
           <div className="login-field">
             <label htmlFor="password" className="login-label">
-              Password
+              Contraseña
             </label>
             <div className="login-input-container">
               <Lock className="login-input-icon" />
@@ -90,7 +88,6 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="login-input"
-                placeholder="Enter your password"
                 required
                 disabled={isLoading}
               />
@@ -114,12 +111,12 @@ const Login: React.FC = () => {
             {isLoading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Signing in...
+                Iniciando sesión...
               </>
             ) : (
               <>
                 <Zap className="w-5 h-5" />
-                Sign In
+                Iniciar sesión
               </>
             )}
           </button>
@@ -127,12 +124,12 @@ const Login: React.FC = () => {
           {/* Register Link */}
           <div className="login-register">
             <p className="login-register-text">
-              Don't have an account?{' '}
+              ¿No tienes una cuenta?{' '}
               <Link
                 to="/register"
                 className="login-register-link"
               >
-                Create one now
+                Crea una ahora
               </Link>
             </p>
           </div>
