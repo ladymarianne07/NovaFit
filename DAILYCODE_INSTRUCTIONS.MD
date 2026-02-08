@@ -12,7 +12,7 @@ Unit tests (frontend: Vitest + React Testing Library; backend: pytest)
 
 Integration tests (frontend: tests que ejerciten el flujo con API mock/axios mock; backend: TestClient real)
 
-y comandos para correrlos.º
+y comandos para correrlos.
 
 Si falta información o no puedes verificar algo del repo, detente y haz preguntas (máximo 10).
 
