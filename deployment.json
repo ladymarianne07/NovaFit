@@ -1,0 +1,47 @@
+{
+  "name": "novafitness",
+  "version": "1.0.0",
+  "description": "NovaFitness - Aplicación completa de seguimiento de fitness con cálculos biométricos",
+  "main": "app/main.py",
+  "scripts": {
+    "start": "uvicorn app.main:app --host 0.0.0.0 --port $PORT",
+    "dev": "uvicorn app.main:app --reload",
+    "test": "python -m pytest",
+    "frontend:install": "cd frontend && npm install",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:start": "cd frontend && npm start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/novafitness.git"
+  },
+  "keywords": [
+    "fitness",
+    "biometrics",
+    "bmr",
+    "tdee",
+    "health",
+    "fastapi",
+    "react",
+    "typescript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "python": ">=3.9"
+  },
+  "deployment": {
+    "backend": {
+      "platform": "render.com",
+      "buildCommand": "pip install -r requirements.txt",
+      "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT",
+      "environment": "Python 3"
+    },
+    "frontend": {
+      "platform": "render.com",
+      "buildCommand": "cd frontend && npm install && npm run build",
+      "publishDirectory": "frontend/build",
+      "type": "static-site"
+    }
+  }
+}
