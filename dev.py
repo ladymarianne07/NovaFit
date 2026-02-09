@@ -61,6 +61,25 @@ def run_server():
         sys.exit(1)
 
 
+def run_migrations():
+    """Run database migrations"""
+    print("🔄 Running database migrations...")
+    try:
+        # Add migrations directory to path
+        migrations_path = project_root / "migrations"
+        if str(migrations_path) not in sys.path:
+            sys.path.insert(0, str(migrations_path))
+        
+        # Import and run the migration
+        print("Running migration 002: Update user schema for complete registration...")
+        import migration_002_update_user_schema_complete_registration as migration_002
+        migration_002.upgrade()
+        print("✅ Migrations completed successfully!")
+    except Exception as e:
+        print(f"❌ Migration failed: {e}")
+        sys.exit(1)
+
+
 def run_tests():
     """Run test suite"""
     print("🧪 Running tests...")
@@ -75,6 +94,7 @@ NovaFitness API Development Script
 Commands:
   setup     - Setup development environment and install dependencies
   init-db   - Initialize database tables
+  migrate   - Run database migrations
   server    - Run development server
   test      - Run test suite
   help      - Show this help message
@@ -82,12 +102,14 @@ Commands:
 Examples:
   python dev.py setup
   python dev.py init-db
+  python dev.py migrate
   python dev.py server
   python dev.py test
 
 For first-time setup, run:
   python dev.py setup
   python dev.py init-db
+  python dev.py migrate
   python dev.py server
     """)
 
@@ -103,6 +125,8 @@ def main():
         setup_environment()
     elif command == "init-db":
         init_database()
+    elif command == "migrate":
+        run_migrations()
     elif command == "server":
         run_server()
     elif command == "test":

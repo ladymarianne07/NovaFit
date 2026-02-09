@@ -16,9 +16,9 @@ class User(Base):
     email = Column(String(DatabaseConstants.MAX_STRING_LENGTH), unique=True, index=True, nullable=False)
     hashed_password = Column(String(DatabaseConstants.MAX_STRING_LENGTH), nullable=False)
     
-    # Profile fields
-    first_name = Column(String(DatabaseConstants.MAX_NAME_LENGTH), nullable=True)
-    last_name = Column(String(DatabaseConstants.MAX_NAME_LENGTH), nullable=True)
+    # Profile fields (required)
+    first_name = Column(String(DatabaseConstants.MAX_NAME_LENGTH), nullable=False)
+    last_name = Column(String(DatabaseConstants.MAX_NAME_LENGTH), nullable=False)
     is_active = Column(Boolean, default=True)
     
     # Biometric data for caloric calculations (required for full registration)
@@ -30,7 +30,7 @@ class User(Base):
     
     # Calculated values (automatically computed when biometric data changes)
     bmr = Column(Float, nullable=False)  # Basal Metabolic Rate
-    daily_caloric_expenditure = Column(Float, nullable=False)  # BMR * activity_level
+    daily_caloric_expenditure = Column(Float, nullable=False)  # BMR * activity_level (TDEE)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

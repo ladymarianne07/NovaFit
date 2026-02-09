@@ -19,7 +19,7 @@ const Login: React.FC = () => {
 
     try {
       await login({
-        username: email, // Backend expects 'username' field
+        email,
         password
       })
     } catch (err: any) {

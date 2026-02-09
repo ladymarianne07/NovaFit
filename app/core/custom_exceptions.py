@@ -58,3 +58,31 @@ class BiometricCalculationError(NovaFitnessException):
 class TokenValidationError(NovaFitnessException):
     """Raised when JWT token validation fails"""
     pass
+
+
+class ValidationError(NovaFitnessException):
+    """Base class for validation errors"""
+    pass
+
+
+class PasswordValidationError(ValidationError):
+    """Raised when password validation fails"""
+    pass
+
+
+class EmailValidationError(ValidationError):
+    """Raised when email validation fails"""
+    pass
+
+
+class NameValidationError(ValidationError):
+    """Raised when name validation fails"""
+    pass
+
+
+class InputValidationError(ValidationError):
+    """Raised when general input validation fails"""
+    
+    def __init__(self, field: str, message: str):
+        self.field = field
+        super().__init__(f"Validation error for {field}: {message}")

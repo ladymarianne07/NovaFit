@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { 
   User, 
-  Settings, 
   LogOut, 
   Activity, 
   Scale, 
@@ -15,7 +14,6 @@ import {
   X
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { BiometricData } from '../services/api'
 import { Button } from '../components/UI/Button'
 import { FormField } from '../components/UI/FormField'
 
@@ -375,10 +373,10 @@ const Dashboard: React.FC = () => {
                     <TrendingUp className="w-4 h-4 text-white" />
                   </div>
                 </div>
-                {user?.tdee ? (
+                {user?.daily_caloric_expenditure ? (
                   <>
                     <div className="text-3xl font-bold text-white mb-2">
-                      {Math.round(user.tdee)}
+                      {Math.round(user.daily_caloric_expenditure)}
                       <span className="text-lg text-white text-opacity-60 font-normal ml-1">cal/day</span>
                     </div>
                     <p className="text-white text-opacity-70 text-sm">
@@ -396,7 +394,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Calorie Zones Card */}
-              {user?.tdee && (
+              {user?.daily_caloric_expenditure && (
                 <div className="bg-white bg-opacity-10 backdrop-blur-sm border border-white border-opacity-20 rounded-lg p-6 md:col-span-2">
                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
                     <Activity className="w-5 h-5 mr-2" />
@@ -406,21 +404,21 @@ const Dashboard: React.FC = () => {
                     <div className="bg-red-500 bg-opacity-20 backdrop-blur-sm border border-red-300 border-opacity-30 rounded-lg p-4">
                       <div className="text-sm font-medium text-red-200 mb-1">Weight Loss</div>
                       <div className="text-xl font-bold text-white">
-                        {Math.round(user.tdee - 500)}
+                        {Math.round(user.daily_caloric_expenditure - 500)}
                       </div>
                       <div className="text-xs text-red-200">-500 cal/day</div>
                     </div>
                     <div className="bg-green-500 bg-opacity-20 backdrop-blur-sm border border-green-300 border-opacity-30 rounded-lg p-4">
                       <div className="text-sm font-medium text-green-200 mb-1">Maintenance</div>
                       <div className="text-xl font-bold text-white">
-                        {Math.round(user.tdee)}
+                        {Math.round(user.daily_caloric_expenditure)}
                       </div>
                       <div className="text-xs text-green-200">Your TDEE</div>
                     </div>
                     <div className="bg-blue-500 bg-opacity-20 backdrop-blur-sm border border-blue-300 border-opacity-30 rounded-lg p-4">
                       <div className="text-sm font-medium text-blue-200 mb-1">Weight Gain</div>
                       <div className="text-xl font-bold text-white">
-                        {Math.round(user.tdee + 500)}
+                        {Math.round(user.daily_caloric_expenditure + 500)}
                       </div>
                       <div className="text-xs text-blue-200">+500 cal/day</div>
                     </div>

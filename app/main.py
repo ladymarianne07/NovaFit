@@ -12,7 +12,14 @@ from .core.custom_exceptions import (
     NovaFitnessException, 
     BiometricValidationError,
     IncompleteBiometricDataError,
-    BiometricCalculationError
+    BiometricCalculationError,
+    ValidationError,
+    PasswordValidationError,
+    EmailValidationError,
+    NameValidationError,
+    InputValidationError,
+    UserAlreadyExistsError,
+    InvalidCredentialsError
 )
 
 # Configure logging
@@ -65,6 +72,86 @@ def setup_middleware(app: FastAPI) -> None:
 
 def setup_exception_handlers(app: FastAPI) -> None:
     """Setup global exception handlers"""
+    
+    # Validation error handlers (most specific first)
+    @app.exception_handler(PasswordValidationError)
+    async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
+        """Handle password validation errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.message,
+                "error_code": "PASSWORD_VALIDATION_ERROR"
+            }
+        )
+    
+    @app.exception_handler(EmailValidationError)
+    async def email_validation_exception_handler(request: Request, exc: EmailValidationError):
+        """Handle email validation errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.message,
+                "error_code": "EMAIL_VALIDATION_ERROR"
+            }
+        )
+    
+    @app.exception_handler(NameValidationError)
+    async def name_validation_exception_handler(request: Request, exc: NameValidationError):
+        """Handle name validation errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.message,
+                "error_code": "NAME_VALIDATION_ERROR"
+            }
+        )
+    
+    @app.exception_handler(InputValidationError)
+    async def input_validation_exception_handler(request: Request, exc: InputValidationError):
+        """Handle input validation errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.message,
+                "field": exc.field,
+                "error_code": "INPUT_VALIDATION_ERROR"
+            }
+        )
+    
+    @app.exception_handler(UserAlreadyExistsError)
+    async def user_already_exists_exception_handler(request: Request, exc: UserAlreadyExistsError):
+        """Handle user already exists errors"""
+        return JSONResponse(
+            status_code=StatusCodes.CONFLICT,
+            content={
+                "detail": exc.message,
+                "error_code": "USER_ALREADY_EXISTS"
+            }
+        )
+    
+    @app.exception_handler(InvalidCredentialsError)
+    async def invalid_credentials_exception_handler(request: Request, exc: InvalidCredentialsError):
+        """Handle invalid credentials errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNAUTHORIZED,
+            content={
+                "detail": exc.message,
+                "error_code": "INVALID_CREDENTIALS"
+            }
+        )
+    
+    # General validation error handler
+    @app.exception_handler(ValidationError)
+    async def validation_exception_handler(request: Request, exc: ValidationError):
+        """Handle general validation errors"""
+        return JSONResponse(
+            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
+            content={
+                "detail": exc.message,
+                "error_code": "VALIDATION_ERROR"
+            }
+        )
     
     @app.exception_handler(BiometricValidationError)
     async def biometric_validation_exception_handler(request: Request, exc: BiometricValidationError):

@@ -43,19 +43,25 @@ export interface User {
   height?: number
   activity_level?: number
   bmr?: number
-  tdee?: number
+  daily_caloric_expenditure?: number
 }
 
 export interface LoginRequest {
-  username: string // Note: backend expects 'username' field for email
+  email: string
   password: string
 }
 
 export interface RegisterRequest {
   email: string
   password: string
-  first_name?: string
-  last_name?: string
+  first_name: string
+  last_name: string
+  // All biometric fields are now required for registration
+  age: number
+  gender: 'male' | 'female'
+  weight: number
+  height: number
+  activity_level: number
 }
 
 export interface BiometricData {

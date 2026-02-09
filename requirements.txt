@@ -4,7 +4,6 @@ sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg2-binary==2.9.9  # PostgreSQL adapter (future)
 python-jose[cryptography]==3.3.0  # JWT tokens
-passlib[bcrypt]==1.7.4  # Password hashing
 python-multipart==0.0.6  # Form data support
 pydantic[email]==2.5.0  # Email validation
 python-dotenv==1.0.0  # Environment variables

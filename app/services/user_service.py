@@ -10,6 +10,7 @@ from ..db.models import User
 from ..schemas.user import UserCreate, Gender, ActivityLevel, UserBiometricsUpdate
 from ..core.security import get_password_hash, verify_password
 from ..services.biometric_service import BiometricService
+from ..services.validation_service import ValidationService
 from ..constants import ErrorMessages
 from ..core.custom_exceptions import (
     UserAlreadyExistsError,
@@ -49,27 +50,41 @@ class UserService:
             
         Raises:
             UserAlreadyExistsError: If user with email already exists
+            PasswordValidationError: If password doesn't meet requirements
+            EmailValidationError: If email is invalid
+            NameValidationError: If names are invalid
+            InputValidationError: If biometric data is invalid
         """
-        # Check if user already exists
+        # STEP 1: Validate all input data (following Backend Guidelines)
+        ValidationService.validate_user_data(
+            email=user_data.email,
+            password=user_data.password,
+            first_name=user_data.first_name,
+            last_name=user_data.last_name
+        )
+        
+        # Validate biometric data
+        ValidationService.validate_biometric_data(
+            age=user_data.age,
+            gender=user_data.gender.value,
+            weight=user_data.weight,
+            height=user_data.height,
+            activity_level=user_data.activity_level.value
+        )
+        
+        # STEP 2: Check if user already exists
         existing_user = self.get_user_by_email(user_data.email)
         if existing_user:
             raise UserAlreadyExistsError(ErrorMessages.EMAIL_ALREADY_EXISTS)
         
-        # Validate biometric data if provided
-        if self._has_complete_biometric_data(user_data):
-            BiometricService.validate_biometric_data(
-                weight=user_data.weight,
-                height=user_data.height,
-                age=user_data.age,
-                gender=user_data.gender,
-                activity_level=user_data.activity_level
-            )
-        
-        # Calculate metrics if all biometric data is available
+        # STEP 3: Calculate metrics (all biometric data is now required and validated)
         bmr, daily_caloric_expenditure = self._calculate_user_metrics(user_data)
         
-        # Create user instance
-        hashed_password = get_password_hash(user_data.password)
+        # STEP 4: Truncate password if needed for bcrypt compatibility
+        safe_password = ValidationService.truncate_password_if_needed(user_data.password)
+        
+        # STEP 5: Create user instance
+        hashed_password = get_password_hash(safe_password)
         
         db_user = User(
             email=user_data.email,

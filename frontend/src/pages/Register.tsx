@@ -2,9 +2,9 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, User, Zap, Scale, Activity, Calendar, Ruler } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { BiometricData } from '../services/api'
 import { Button } from '../components/UI/Button'
 import { FormField } from '../components/UI/FormField'
+import { ValidationService } from '../services/validation'
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1)
@@ -29,41 +29,76 @@ const Register: React.FC = () => {
   const { register, updateBiometrics } = useAuth()
 
   const validateStep1 = () => {
-    if (!email || !password || !confirmPassword) {
-      setError('All fields are required')
+    // Use ValidationService for consistent validation
+    const emailResult = ValidationService.validateEmail(email)
+    if (!emailResult.isValid) {
+      setError(emailResult.error!)
       return false
     }
+    
+    const passwordResult = ValidationService.validatePassword(password)
+    if (!passwordResult.isValid) {
+      setError(passwordResult.error!)
+      return false
+    }
+    
+    if (!confirmPassword) {
+      setError('Please confirm your password')
+      return false
+    }
+    
     if (password !== confirmPassword) {
       setError('Passwords do not match')
       return false
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+    
+    const firstNameResult = ValidationService.validateName(firstName)
+    if (!firstNameResult.isValid) {
+      setError(`First name: ${firstNameResult.error}`)
       return false
     }
+    
+    const lastNameResult = ValidationService.validateName(lastName)
+    if (!lastNameResult.isValid) {
+      setError(`Last name: ${lastNameResult.error}`)
+      return false
+    }
+    
     return true
   }
 
   const validateStep2 = () => {
-    if (!age || !gender || !weight || !height || !activityLevel) {
-      setError('All biometric fields are required for accurate calculations')
+    // Use ValidationService for biometric data validation  
+    const ageResult = ValidationService.validateAge(age)
+    if (!ageResult.isValid) {
+      setError(ageResult.error!)
       return false
     }
-    const ageNum = parseInt(age)
-    if (ageNum < 13 || ageNum > 120) {
-      setError('Age must be between 13 and 120')
+    
+    const genderResult = ValidationService.validateGender(gender)
+    if (!genderResult.isValid) {
+      setError(genderResult.error!)
       return false
     }
-    const weightNum = parseFloat(weight)
-    if (weightNum < 30 || weightNum > 300) {
-      setError('Weight must be between 30kg and 300kg')
+    
+    const weightResult = ValidationService.validateWeight(weight)
+    if (!weightResult.isValid) {
+      setError(weightResult.error!)
       return false
     }
-    const heightNum = parseFloat(height)
-    if (heightNum < 100 || heightNum > 250) {
-      setError('Height must be between 100cm and 250cm')
+    
+    const heightResult = ValidationService.validateHeight(height)
+    if (!heightResult.isValid) {
+      setError(heightResult.error!)
       return false
     }
+    
+    const activityResult = ValidationService.validateActivityLevel(activityLevel)
+    if (!activityResult.isValid) {
+      setError(activityResult.error!)
+      return false
+    }
+    
     return true
   }
 
@@ -85,16 +120,15 @@ const Register: React.FC = () => {
     setIsLoading(true)
 
     try {
-      // Register user
+      // Truncate password if needed for bcrypt compatibility (matches backend)
+      const safePassword = ValidationService.truncatePasswordIfNeeded(password)
+      
+      // Register user with all data including biometrics (atomic operation)
       await register({
         email,
-        password,
+        password: safePassword,
         first_name: firstName,
-        last_name: lastName
-      })
-
-      // Update biometrics
-      await updateBiometrics({
+        last_name: lastName,
         age: parseInt(age),
         gender: gender as 'male' | 'female',
         weight: parseFloat(weight),

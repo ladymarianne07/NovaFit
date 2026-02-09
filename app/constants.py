@@ -13,6 +13,17 @@ class ErrorMessages:
     INACTIVE_USER = "Inactive user"
     INVALID_TOKEN = "Could not validate credentials"
     BIOMETRIC_DATA_INCOMPLETE = "Incomplete biometric data for calculations"
+    
+    # Validation error messages
+    PASSWORD_TOO_SHORT = f"Password must be at least {8} characters long"
+    PASSWORD_TOO_LONG = f"Password cannot exceed {72} characters (bcrypt limitation)"
+    INVALID_EMAIL_FORMAT = "Invalid email format"
+    NAME_TOO_SHORT = "Name cannot be empty"
+    NAME_TOO_LONG = f"Name cannot exceed {100} characters"
+    INVALID_AGE_RANGE = f"Age must be between {1} and {120} years"
+    INVALID_WEIGHT_RANGE = f"Weight must be between {20.0} and {300.0} kg"
+    INVALID_HEIGHT_RANGE = f"Height must be between {100.0} and {250.0} cm"
+    INVALID_ACTIVITY_LEVEL = "Invalid activity level selected"
 
 
 # Success Messages
@@ -31,6 +42,12 @@ class DatabaseConstants:
     MAX_NAME_LENGTH = 100
     MAX_TITLE_LENGTH = 200
     MIN_PASSWORD_LENGTH = 8
+    MAX_PASSWORD_LENGTH = 72  # bcrypt limitation - truncate if longer
+    MAX_EMAIL_LENGTH = 254    # RFC 5321 standard
+    MIN_NAME_LENGTH = 1
+    
+    # Character limits for validation
+    PASSWORD_BYTE_LIMIT = 72  # bcrypt cannot handle more than 72 bytes
     
 
 # Biometric Constants

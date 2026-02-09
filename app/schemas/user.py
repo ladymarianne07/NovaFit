@@ -23,8 +23,8 @@ class ActivityLevel(float, Enum):
 class UserBase(BaseModel):
     """Base user schema"""
     email: EmailStr
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: str = Field(..., min_length=1, description="First name is required")
+    last_name: str = Field(..., min_length=1, description="Last name is required")
 
 
 class UserBiometrics(BaseModel):
