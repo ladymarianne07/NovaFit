@@ -80,7 +80,7 @@ describe('Design System Integration', () => {
     render(<TestForm />)
 
     // Verify form renders correctly
-    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/correo electrónico/i)).toBeInTheDocument()
     expect(screen.getByTestId('email-icon')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
     expect(screen.getByTestId('submit-icon')).toBeInTheDocument()
@@ -137,8 +137,8 @@ describe('Design System Integration', () => {
     )
 
     // All inputs should have glassmorphism styling
-    const emailInput = screen.getByLabelText(/email address/i)
-    const passwordInput = screen.getByLabelText(/password/i)
+    const emailInput = screen.getByLabelText(/correo electrónico/i)
+    const passwordInput = screen.getByLabelText(/contraseña/i)
     const nameInput = screen.getByLabelText(/full name/i)
 
     expect(emailInput).toHaveClass('login-input')

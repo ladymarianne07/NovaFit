@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from .config import settings
 from .api import auth, users, events
@@ -72,6 +73,27 @@ def setup_middleware(app: FastAPI) -> None:
 
 def setup_exception_handlers(app: FastAPI) -> None:
     """Setup global exception handlers"""
+    
+    # FastAPI default validation error handler (handles Pydantic validation errors)
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """Handle FastAPI request validation errors (Pydantic validation failures)"""
+        # Extract the first error message for user-friendly display  
+        if exc.errors():
+            first_error = exc.errors()[0]
+            field_name = " -> ".join([str(loc) for loc in first_error["loc"][1:]])  # Skip 'body'
+            error_msg = first_error["msg"]
+            detail = f"{field_name}: {error_msg}" if field_name else error_msg
+        else:
+            detail = "Invalid input data"
+        
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": detail,
+                "error_code": "VALIDATION_ERROR"
+            }
+        )
     
     # Validation error handlers (most specific first)
     @app.exception_handler(PasswordValidationError)

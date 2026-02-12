@@ -38,7 +38,8 @@ def test_user_data():
     return {
         "email": "test@example.com",
         "password": "testpassword123", 
-        "full_name": "Test User",
+        "first_name": "Test",
+        "last_name": "User",
         "gender": "male",
         "weight": 70.0,
         "height": 175.0,

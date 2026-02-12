@@ -44,6 +44,8 @@ export const Input: React.FC<InputProps> = ({
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="login-password-toggle"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            tabIndex={0}
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>

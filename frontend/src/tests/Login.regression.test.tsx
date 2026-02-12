@@ -47,13 +47,14 @@ describe('Login Page - Regression Tests', () => {
       expect(logoContainer).toBeInTheDocument()
       
       // Header elements
-      expect(screen.getByText(/welcome to/i)).toBeInTheDocument()
+      expect(screen.getByText(/novafitness/i)).toBeInTheDocument()
+      expect(screen.getByText(/transforma tu camino/i)).toBeInTheDocument()
       expect(screen.getByText(/novafitness/i)).toBeInTheDocument()
       expect(screen.getByText(/transform your fitness journey/i)).toBeInTheDocument()
 
       // Form fields
-      expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/dirección de correo electrónico/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/contraseña/i)).toBeInTheDocument()
       
       // Form controls
       expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
@@ -69,15 +70,15 @@ describe('Login Page - Regression Tests', () => {
       expect(container).toBeInTheDocument()
 
       // Form fields
-      const emailField = screen.getByLabelText(/email address/i).closest('.login-field')
+      const emailField = screen.getByLabelText(/dirección de correo electrónico/i).closest('.login-field')
       expect(emailField).toHaveClass('login-field')
 
-      const passwordField = screen.getByLabelText(/password/i).closest('.login-field')
+      const passwordField = screen.getByLabelText(/contraseña/i).closest('.login-field')
       expect(passwordField).toHaveClass('login-field')
 
       // Input styling
-      expect(screen.getByLabelText(/email address/i)).toHaveClass('login-input')
-      expect(screen.getByLabelText(/password/i)).toHaveClass('login-input')
+      expect(screen.getByLabelText(/dirección de correo electrónico/i)).toHaveClass('login-input')
+      expect(screen.getByLabelText(/contraseña/i)).toHaveClass('login-input')
 
       // Button styling
       expect(screen.getByRole('button', { name: /sign in/i })).toHaveClass('login-button')
@@ -99,8 +100,8 @@ describe('Login Page - Regression Tests', () => {
       expect(passwordToggle).toBeInTheDocument()
 
       // Submit button icon
-      const submitButton = screen.getByRole('button', { name: /sign in/i })
-      expect(submitButton.textContent).toContain('Sign In')
+      const submitButton = screen.getByRole('button', { name: /iniciar sesión/i })
+      expect(submitButton.textContent).toContain('Iniciar sesión')
     })
   })
 
@@ -108,7 +109,7 @@ describe('Login Page - Regression Tests', () => {
     test('handles email input changes', () => {
       render(<LoginWrapper />)
 
-      const emailInput = screen.getByLabelText(/email address/i)
+      const emailInput = screen.getByLabelText(/dirección de correo electrónico/i)
       fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
       
       expect(emailInput).toHaveValue('test@example.com')
@@ -117,7 +118,7 @@ describe('Login Page - Regression Tests', () => {
     test('handles password input changes', () => {
       render(<LoginWrapper />)
 
-      const passwordInput = screen.getByLabelText(/password/i)
+      const passwordInput = screen.getByLabelText(/contraseña/i)
       fireEvent.change(passwordInput, { target: { value: 'password123' } })
       
       expect(passwordInput).toHaveValue('password123')
@@ -126,7 +127,7 @@ describe('Login Page - Regression Tests', () => {
     test('toggles password visibility correctly', () => {
       render(<LoginWrapper />)
 
-      const passwordInput = screen.getByLabelText(/password/i)
+      const passwordInput = screen.getByLabelText(/contraseña/i)
       const toggleButton = document.querySelector('.login-password-toggle')
 
       // Initially password should be hidden
@@ -146,7 +147,7 @@ describe('Login Page - Regression Tests', () => {
     test('validates required fields on submit', () => {
       render(<LoginWrapper />)
 
-      const submitButton = screen.getByRole('button', { name: /sign in/i })
+      const submitButton = screen.getByRole('button', { name: /iniciar sesión/i })
       
       // Click submit without filling required fields
       fireEvent.click(submitButton)

@@ -64,23 +64,23 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Verify FormField components are used (they have glassmorphism classes)
-      const emailField = screen.getByLabelText(/email address/i).closest('.login-field')
+      const emailField = screen.getByLabelText(/correo electrónico/i).closest('.login-field')
       expect(emailField).toBeInTheDocument()
       expect(emailField).toHaveClass('login-field')
 
-      const passwordField = screen.getByLabelText(/password/i).closest('.login-field')
+      const passwordField = screen.getByLabelText(/^contraseña/i).closest('.login-field')
       expect(passwordField).toBeInTheDocument()
       expect(passwordField).toHaveClass('login-field')
 
       // Verify inputs have glassmorphism styling
-      expect(screen.getByLabelText(/email address/i)).toHaveClass('login-input')
-      expect(screen.getByLabelText(/password/i)).toHaveClass('login-input')
+      expect(screen.getByLabelText(/correo electrónico/i)).toHaveClass('login-input')
+      expect(screen.getByLabelText(/^contraseña/i)).toHaveClass('login-input')
     })
 
     test('uses design system Button component', () => {
       render(<RegisterWrapper />)
 
-      const continueButton = screen.getByRole('button', { name: /continue to profile setup/i })
+      const continueButton = screen.getByRole('button', { name: /continuar a configuración de perfil/i })
       expect(continueButton).toHaveClass('login-button') // Design system button uses glassmorphism class
     })
 
@@ -88,12 +88,12 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Title styling
-      expect(screen.getByText(/join/i)).toBeInTheDocument()
+      expect(screen.getByText(/crea tu cuenta/i)).toBeInTheDocument()
       const titleBrand = screen.getByText(/novafitness/i)
       expect(titleBrand).toHaveClass('login-title-brand')
 
       // Footer/register link styling  
-      const loginLink = screen.getByRole('link', { name: /sign in here/i })
+      const loginLink = screen.getByRole('link', { name: /inicia sesión aquí/i })
       expect(loginLink).toHaveClass('login-register-link')
     })
   })
@@ -103,22 +103,22 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Form fields should be present
-      expect(screen.getByLabelText(/first name/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/last name/i)).toBeInTheDocument()  
-      expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/confirm password/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/apellido/i)).toBeInTheDocument()  
+      expect(screen.getByLabelText(/correo electrónico/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^contraseña/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/confirmar contraseña/i)).toBeInTheDocument()
 
       // Continue button should be present
-      expect(screen.getByRole('button', { name: /continue to profile setup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /continuar a configuración de perfil/i })).toBeInTheDocument()
     })
 
     test('handles form input changes', () => {
       render(<RegisterWrapper />)
 
-      const firstNameInput = screen.getByLabelText(/first name/i)
-      const emailInput = screen.getByLabelText(/email address/i)
-      const passwordInput = screen.getByLabelText(/password/i)
+      const firstNameInput = screen.getByLabelText(/nombre/i)
+      const emailInput = screen.getByLabelText(/correo electrónico/i)
+      const passwordInput = screen.getByLabelText(/^contraseña/i)
 
       fireEvent.change(firstNameInput, { target: { value: 'John' } })
       fireEvent.change(emailInput, { target: { value: 'john@example.com' } })
@@ -132,7 +132,7 @@ describe('Register Page - Design System Integration', () => {
     test('shows password toggle functionality', () => {
       render(<RegisterWrapper />)
 
-      const passwordInput = screen.getByLabelText(/^password$/i)
+      const passwordInput = screen.getByLabelText(/^contraseña/i)
       
       // Initially password should be hidden
       expect(passwordInput).toHaveAttribute('type', 'password')
@@ -149,19 +149,19 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Fill step 1 form
-      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } })
-      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } })
-      fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'john@example.com' } })
-      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password123' } })
-      fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'password123' } })
+      fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText(/apellido/i), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'john@example.com' } })
+      fireEvent.change(screen.getByLabelText(/^contraseña/i), { target: { value: 'password123' } })
+      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password123' } })
 
       // Submit step 1
-      fireEvent.click(screen.getByRole('button', { name: /continue to profile setup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
 
       // Should progress to step 2
       await waitFor(() => {
-        expect(screen.getByText(/step 2 of 2/i)).toBeInTheDocument()
-        expect(screen.getByText(/biometric profile/i)).toBeInTheDocument()
+        expect(screen.getByText(/paso 2 de 2/i)).toBeInTheDocument()
+        expect(screen.getByText(/perfil biométrico/i)).toBeInTheDocument()
       })
     })
   })
@@ -171,49 +171,49 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
       
       // Fill and submit step 1 first
-      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } })
-      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } })
-      fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'john@example.com' } })
-      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password123' } })
-      fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'password123' } })
-      fireEvent.click(screen.getByRole('button', { name: /continue to profile setup/i }))
+      fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText(/apellido/i), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'john@example.com' } })
+      fireEvent.change(screen.getByLabelText(/^contraseña/i), { target: { value: 'password123' } })
+      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password123' } })
+      fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
       
       await waitFor(() => {
-        expect(screen.getByText(/step 2 of 2/i)).toBeInTheDocument()
+        expect(screen.getByText(/paso 2 de 2/i)).toBeInTheDocument()
       })
     })
 
     test('renders step 2 biometric form fields', () => {
       // Biometric fields should be present
       expect(screen.getByLabelText(/age/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/gender/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/weight/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/height/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/activity level/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/género/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/peso.*kg/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/altura.*cm/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/nivel de actividad/i)).toBeInTheDocument()
 
       // Navigation buttons
-      expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /complete setup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /atrás/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /completar configuración/i })).toBeInTheDocument()
     })
 
     test('uses glassmorphism styling for select fields', () => {
-      const genderSelect = screen.getByLabelText(/gender/i)
+      const genderSelect = screen.getByLabelText(/género/i)
       expect(genderSelect).toHaveClass('login-input')
 
       const genderField = genderSelect.closest('.login-field')
       expect(genderField).toHaveClass('login-field')
 
-      const activitySelect = screen.getByLabelText(/activity level/i)
+      const activitySelect = screen.getByLabelText(/nivel de actividad/i)
       expect(activitySelect).toHaveClass('login-input')
     })
 
     test('handles back navigation to step 1', async () => {
-      fireEvent.click(screen.getByRole('button', { name: /back/i }))
+      fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/step 1 of 2/i)).toBeInTheDocument()
-        expect(screen.getByText(/account details/i)).toBeInTheDocument()
-        expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
+        expect(screen.getByText(/paso 1 de 2/i)).toBeInTheDocument()
+        expect(screen.getByText(/detalles de la cuenta/i)).toBeInTheDocument()
+        expect(screen.getByLabelText(/correo electrónico/i)).toBeInTheDocument()
       })
     })
 
@@ -223,13 +223,13 @@ describe('Register Page - Design System Integration', () => {
 
       // Fill biometric form
       fireEvent.change(screen.getByLabelText(/age/i), { target: { value: '25' } })
-      fireEvent.change(screen.getByLabelText(/gender/i), { target: { value: 'male' } })
-      fireEvent.change(screen.getByLabelText(/weight/i), { target: { value: '70' } })
-      fireEvent.change(screen.getByLabelText(/height/i), { target: { value: '175' } })
-      fireEvent.change(screen.getByLabelText(/activity level/i), { target: { value: '1.50' } })
+      fireEvent.change(screen.getByLabelText(/género/i), { target: { value: 'male' } })
+      fireEvent.change(screen.getByLabelText(/peso.*kg/i), { target: { value: '70' } })
+      fireEvent.change(screen.getByLabelText(/altura.*cm/i), { target: { value: '175' } })
+      fireEvent.change(screen.getByLabelText(/nivel de actividad/i), { target: { value: '1.50' } })
 
       // Submit complete registration
-      fireEvent.click(screen.getByRole('button', { name: /complete setup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /completar configuración/i }))
 
       await waitFor(() => {
         expect(mockRegister).toHaveBeenCalledWith({
@@ -286,13 +286,13 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Fill form with mismatched passwords
-      fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'John' } })
-      fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } })
-      fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'john@example.com' } })
-      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'password123' } })
-      fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'different' } })
+      fireEvent.change(screen.getByLabelText(/nombre/i), { target: { value: 'John' } })
+      fireEvent.change(screen.getByLabelText(/apellido/i), { target: { value: 'Doe' } })
+      fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'john@example.com' } })
+      fireEvent.change(screen.getByLabelText(/^contraseña/i), { target: { value: 'password123' } })
+      fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'different' } })
 
-      fireEvent.click(screen.getByRole('button', { name: /continue to profile setup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/passwords do not match/i)).toBeInTheDocument()
