@@ -21,7 +21,7 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({
     <div className={`calorie-tracker ${className}`}>
       {/* Welcome Message */}
       <div className="calorie-tracker-header">
-        <h1 className="calorie-tracker-welcome">Welcome back, {userName}!</h1>
+        <h1 className="calorie-tracker-welcome">¡Bienvenido de vuelta, {userName}!</h1>
       </div>
 
       {/* Main Calorie Card */}
@@ -34,7 +34,7 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({
         {/* Calorie Info */}
         <div className="calorie-tracker-content">
           <div className="calorie-tracker-title">
-            Total Caloric Expenditure
+            Gasto Calórico Total
           </div>
           
           <div className="calorie-tracker-main-value">
@@ -52,7 +52,7 @@ const CalorieTracker: React.FC<CalorieTrackerProps> = ({
             <div className="calorie-tracker-percentage">{percentageText}% cal</div>
           </div>
 
-          <div className="calorie-tracker-target">of {targetCalories.toLocaleString('en-US')} cal</div>
+          <div className="calorie-tracker-target">de {targetCalories.toLocaleString('en-US')} cal</div>
         </div>
       </div>
     </div>

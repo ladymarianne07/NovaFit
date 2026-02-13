@@ -283,32 +283,32 @@ class NutritionService:
         
         # Analyze macronutrient balance
         if progress.carbs_percentage < 80:
-            suggestions.append("Add complex carbs like oats or quinoa to boost energy")
+            suggestions.append("Agrega carbohidratos complejos como avena o quinoa para aumentar tu energía")
         elif progress.carbs_percentage > 120:
-            suggestions.append("Consider reducing refined carbs and focusing on protein")
+            suggestions.append("Considera reducir los carbohidratos refinados y enfocarte en proteína")
             
         if progress.protein_percentage < 80:
-            suggestions.append("Include lean protein sources like chicken or fish")
+            suggestions.append("Incluye fuentes magras de proteína como pollo o pescado")
         elif progress.protein_percentage > 120:
-            suggestions.append("Great protein intake! Balance with healthy fats")
+            suggestions.append("¡Excelente ingesta de proteína! Equilibra con grasas saludables")
             
         if progress.fat_percentage < 70:
-            suggestions.append("Add healthy fats like avocado or nuts")
+            suggestions.append("Agrega grasas saludables como aguacate o frutos secos")
         elif progress.fat_percentage > 130:
-            suggestions.append("Moderate fat intake and focus on complex carbs")
+            suggestions.append("Modera la ingesta de grasas y enfócate en carbohidratos complejos")
         
         # Overall calorie analysis
         if progress.calories_percentage < 85:
-            suggestions.append("Try eating smaller, frequent meals to meet calorie goals")
+            suggestions.append("Intenta comer comidas pequeñas y frecuentes para alcanzar tus objetivos calóricos")
         elif progress.calories_percentage > 110:
-            suggestions.append("Consider a HIIT workout to boost calorie burn")
+            suggestions.append("Considera un entrenamiento HIIT para impulsar la quema de calorías")
         
         # Default suggestion if everything is balanced
         if not suggestions:
             suggestions = [
-                "Great balance! Try doing a HIIT workout today to boost your calorie burn and improve your cardiovascular fitness.",
-                "Your nutrition is on track! Consider adding some light stretching after meals.",
-                "Perfect macronutrient balance! Stay hydrated and keep up the great work."
+                "¡Excelente balance! Intenta hacer un entrenamiento HIIT hoy para impulsar tu quema de calorías y mejorar tu forma cardiovascular.",
+                "¡Tu nutrición va bien! Considera agregar algo de estiramiento ligero después de las comidas.",
+                "¡Balance de macronutrientes perfecto! Mantente hidratado y sigue con el excelente trabajo."
             ]
         
         # Select first suggestion (could be randomized)

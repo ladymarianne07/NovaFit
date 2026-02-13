@@ -29,7 +29,7 @@ const MacronutrientsCard: React.FC<MacronutrientsCardProps> = ({
     <div className={`macronutrients-card ${className}`}>
       {/* Header */}
       <div className="macronutrients-header">
-        <h3 className="macronutrients-title">Macronutrients</h3>
+        <h3 className="macronutrients-title">Macronutrientes</h3>
       </div>
 
       <div className="macronutrients-list">
@@ -39,7 +39,7 @@ const MacronutrientsCard: React.FC<MacronutrientsCardProps> = ({
             <Zap size={20} />
           </div>
           <div className="macro-info">
-            <span className="macro-label">Carbs</span>
+            <span className="macro-label">Carbohidratos</span>
             <span className="macro-value">{Math.round(data.carbs)}g</span>
           </div>
           <div className="macro-percentage">
@@ -53,7 +53,7 @@ const MacronutrientsCard: React.FC<MacronutrientsCardProps> = ({
             <Activity size={20} />
           </div>
           <div className="macro-info">
-            <span className="macro-label">Protein</span>
+            <span className="macro-label">Proteína</span>
             <span className="macro-value">{Math.round(data.protein)}g</span>
           </div>
           <div className="macro-percentage">
@@ -67,7 +67,7 @@ const MacronutrientsCard: React.FC<MacronutrientsCardProps> = ({
             <Droplets size={20} />
           </div>
           <div className="macro-info">
-            <span className="macro-label">Fat</span>
+            <span className="macro-label">Grasas</span>
             <span className="macro-value">{Math.round(data.fat)}g</span>
           </div>
           <div className="macro-percentage">

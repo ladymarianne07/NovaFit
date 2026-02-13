@@ -25,11 +25,11 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
       <div className="suggestion-header">
         <div className="suggestion-title">
           <Sparkles className="suggestion-star" size={20} />
-          <span>Suggestion of the Day</span>
+          <span>Sugerencia del Día</span>
         </div>
         <div className="suggestion-ai-badge">
           <Sparkles size={14} />
-          <span>AI</span>
+          <span>IA</span>
         </div>
       </div>
 
@@ -42,7 +42,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
               <span></span>
               <span></span>
             </div>
-            <p>Generating personalized suggestion...</p>
+            <p>Generando sugerencia personalizada...</p>
           </div>
         ) : (
           <p className="suggestion-text">
