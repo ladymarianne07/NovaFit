@@ -72,6 +72,48 @@ export interface BiometricData {
   activity_level: number
 }
 
+// Nutrition Types
+export interface MacronutrientData {
+  carbs: number
+  protein: number
+  fat: number
+  carbs_target: number
+  protein_target: number
+  fat_target: number
+  carbs_percentage: number
+  protein_percentage: number
+  fat_percentage: number
+  total_calories: number
+  calories_target: number
+  calories_percentage: number
+}
+
+export interface MealLogData {
+  food_name: string
+  quantity_grams: number
+  calories_per_100g: number
+  carbs_per_100g: number
+  protein_per_100g: number
+  fat_per_100g: number
+}
+
+export interface MealLogResponse extends MealLogData {
+  id: number
+  user_id: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
+  event_timestamp: string
+}
+
+export interface SuggestionData {
+  suggestion: string
+  type: string
+  priority: string
+  created_at: string
+}
+
 export interface LoginResponse {
   access_token: string
   token_type: string
@@ -96,6 +138,25 @@ export const authAPI = {
 
   updateBiometrics: async (biometrics: BiometricData): Promise<User> => {
     const response = await api.put('/users/me/biometrics', biometrics)
+    return response.data
+  },
+}
+
+// Nutrition API endpoints
+export const nutritionAPI = {
+  getMacronutrients: async (targetDate?: string): Promise<MacronutrientData> => {
+    const params = targetDate ? { target_date: targetDate } : {}
+    const response = await api.get('/nutrition/macros', { params })
+    return response.data
+  },
+
+  logMeal: async (mealData: MealLogData): Promise<MealLogResponse> => {
+    const response = await api.post('/nutrition/meals', mealData)
+    return response.data
+  },
+
+  getSuggestions: async (): Promise<SuggestionData> => {
+    const response = await api.get('/nutrition/suggestions')
     return response.data
   },
 }

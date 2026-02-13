@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { Input, InputProps } from './Input'
 
-export interface FormFieldProps extends Omit<InputProps, 'error'> {
+export interface FormFieldProps extends Omit<InputProps, 'error' | 'onChange'> {
   validate?: (value: string) => string
   onChange?: (value: string, isValid: boolean) => void
   value?: string

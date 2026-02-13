@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .config import settings
-from .api import auth, users, events
+from .api import auth, users, events, nutrition
 from .db.database import create_tables
 from .constants import AppConstants, StatusCodes
 from .core.custom_exceptions import (
@@ -239,6 +239,7 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(events.router)
+    app.include_router(nutrition.router)
     
     @app.get("/")
     async def root():

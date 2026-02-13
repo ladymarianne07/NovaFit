@@ -108,14 +108,6 @@ const Modal: React.FC<ModalProps> = ({
       </div>
     </div>
   );
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
 
   if (!isOpen) return null;
 

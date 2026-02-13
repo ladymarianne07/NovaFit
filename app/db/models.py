@@ -73,6 +73,40 @@ class Event(Base):
         return f"<Event(type='{self.event_type}', user_id={self.user_id})>"
 
 
+class DailyNutrition(Base):
+    """Daily nutrition tracking for macronutrients"""
+    __tablename__ = "daily_nutrition"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    
+    # Date for the nutrition tracking (one record per user per date)
+    date = Column(DateTime(timezone=True), nullable=False, index=True)
+    
+    # Macronutrients in grams
+    carbs_consumed = Column(Float, default=0.0, nullable=False)  # in grams
+    protein_consumed = Column(Float, default=0.0, nullable=False)  # in grams  
+    fat_consumed = Column(Float, default=0.0, nullable=False)  # in grams
+    
+    # Daily targets in grams (calculated based on user profile)
+    carbs_target = Column(Float, nullable=False)  # in grams
+    protein_target = Column(Float, nullable=False)  # in grams
+    fat_target = Column(Float, nullable=False)  # in grams
+    
+    # Total calories from macros
+    total_calories = Column(Float, default=0.0, nullable=False)  # calculated field
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User")
+    
+    def __repr__(self):
+        return f"<DailyNutrition(user_id={self.user_id}, date={self.date})>"
+
+
 # Database indexes for performance
 # These will be created automatically by SQLAlchemy when tables are created
 # Index on (user_id, event_timestamp) for efficient user timeline queries
