@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/UI/Button'
 import { FormField } from '../components/UI/FormField'
 import { ValidationService } from '../services/validation'
+import ObjectiveForm from '../components/ObjectiveForm'
+import { FitnessObjective } from '../services/api'
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1)
@@ -25,6 +27,10 @@ const Register: React.FC = () => {
   const [weight, setWeight] = useState('')
   const [height, setHeight] = useState('')
   const [activityLevel, setActivityLevel] = useState('')
+
+  // Objective data (optional)
+  const [objective, setObjective] = useState<FitnessObjective | undefined>(undefined)
+  const [aggressiveness, setAggressiveness] = useState(2)
 
   const { register, updateBiometrics } = useAuth()
 
@@ -117,13 +123,20 @@ const Register: React.FC = () => {
     
     if (!validateStep2()) return
 
+    // Move to step 3 (objective) instead of registering immediately
+    setStep(3)
+  }
+
+  const handleStep3Submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
     setIsLoading(true)
 
     try {
       // Truncate password if needed for bcrypt compatibility (matches backend)
       const safePassword = ValidationService.truncatePasswordIfNeeded(password)
       
-      // Register user with all data including biometrics (atomic operation)
+      // Register user with all data including biometrics and objective
       await register({
         email,
         password: safePassword,
@@ -133,7 +146,9 @@ const Register: React.FC = () => {
         gender: gender as 'male' | 'female',
         weight: parseFloat(weight),
         height: parseFloat(height),
-        activity_level: parseFloat(activityLevel)
+        activity_level: parseFloat(activityLevel),
+        objective: objective,
+        aggressiveness_level: objective ? aggressiveness : undefined
       })
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.')
@@ -176,22 +191,27 @@ const Register: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-white">
-              Paso {step} de 2
+              Paso {step} de 3
             </span>
             <span className="text-sm text-gray-300">
-              {step === 1 ? '- Detalles de la cuenta' : '- Perfil biométrico'}
+              {step === 1 
+                ? '- Detalles de la cuenta' 
+                : step === 2
+                ? '- Perfil biométrico'
+                : '- Objetivo Fitness (Opcional)'
+              }
             </span>
           </div>
           <div className="w-full bg-gray-700 bg-opacity-30 rounded-full h-2">
             <div 
               className="bg-white bg-opacity-40 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(step / 2) * 100}%` }}
+              style={{ width: `${(step / 3) * 100}%` }}
             ></div>
           </div>
         </div>
 
         {/* Registration Form */}
-        <form onSubmit={step === 1 ? handleStep1Submit : handleStep2Submit} className="login-form">
+        <form onSubmit={step === 1 ? handleStep1Submit : step === 2 ? handleStep2Submit : handleStep3Submit} className="login-form">
           {error && (
             <div className="login-error">
               <p className="text-red-300 text-sm text-center">{error}</p>
@@ -257,7 +277,7 @@ const Register: React.FC = () => {
                 Continuar a Configuración de Perfil
               </Button>
             </div>
-          ) : (
+          ) : step === 2 ? (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
@@ -368,11 +388,49 @@ const Register: React.FC = () => {
                   icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
                   className="flex-1"
                 >
-                  {isLoading ? 'Creando...' : 'Completar Configuración'}
+                  {isLoading ? 'Creando...' : 'Configurar Objetivo'}
                 </Button>
               </div>
             </div>
-          )}
+          ) : step === 3 ? (
+            <div className="space-y-6">
+              <ObjectiveForm
+                selectedObjective={objective}
+                selectedAggressiveness={aggressiveness}
+                tdee={parseFloat(activityLevel) * (10 * parseFloat(weight) + 6.25 * parseFloat(height) - 5 * parseInt(age) + (gender === 'male' ? 5 : -161))}
+                weight={parseFloat(weight) || 70}
+                onObjectiveChange={(obj, agg) => {
+                  setObjective(obj)
+                  setAggressiveness(agg)
+                }}
+              />
+
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setStep(2)}
+                  disabled={isLoading}
+                  className="flex-1"
+                >
+                  Atrás
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  isLoading={isLoading}
+                  icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
+                  className="flex-1"
+                >
+                  {isLoading ? 'Creando Cuenta...' : 'Completar Registro'}
+                </Button>
+              </div>
+
+              <p className="text-center text-sm text-gray-300">
+                Puedes cambiar tu objetivo después en tu perfil
+              </p>
+            </div>
+          ) : null}
 
           <div className="login-register">
             <p className="login-register-text">

@@ -3,12 +3,24 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..dependencies import get_user_service, get_biometric_service, get_current_active_user
-from ..schemas.user import UserResponse, UserUpdate, UserBiometricsUpdate
+from ..schemas.user import UserResponse, UserUpdate, UserBiometricsUpdate, FitnessObjective
 from ..services.user_service import UserService
 from ..services.biometric_service import BiometricService
 from ..db.models import User
 from ..constants import SuccessMessages
 from ..core.custom_exceptions import BiometricValidationError, IncompleteBiometricDataError
+from pydantic import BaseModel, Field
+
+
+class ObjectiveUpdate(BaseModel):
+    """Request model for updating user's fitness objective"""
+    objective: FitnessObjective = Field(..., description="Fitness objective")
+    aggressiveness_level: int = Field(
+        default=2,
+        ge=1,
+        le=3,
+        description="Aggressiveness level (1=conservative, 2=moderate, 3=aggressive)"
+    )
 
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -117,4 +129,34 @@ async def recalculate_user_metrics(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+
+@router.put("/me/objective", response_model=UserResponse)
+async def update_user_objective(
+    objective_data: ObjectiveUpdate,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Update user's fitness objective and recalculate calorie/macro targets
+    
+    This endpoint updates the user's fitness objective (maintenance, fat_loss, muscle_gain, 
+    body_recomposition, performance) and an optional aggressiveness level. The system 
+    automatically recalculates:
+    - Target daily calories (based on objective and TDEE)
+    - Protein, fat, and carbohydrate targets (in grams)
+    """
+    try:
+        updated_user = user_service.update_user_objective(
+            current_user,
+            objective_data.objective.value,
+            objective_data.aggressiveness_level
+        )
+        
+        return updated_user
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to update objective: {str(e)}"
         )

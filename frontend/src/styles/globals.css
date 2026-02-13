@@ -1018,3 +1018,332 @@
     align-self: flex-end;
   }
 }
+
+/* =============================================
+   Objective Form Styles
+   ============================================= */
+
+.objective-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.objective-selection-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.objective-label {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-neutral-900);
+}
+
+.objectives-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.objective-card {
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: var(--radius-lg);
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.objective-card:hover {
+  border-color: #d1d5db;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.objective-card.active {
+  border-width: 2px;
+  background: rgba(59, 130, 246, 0.05);
+  box-shadow: var(--shadow);
+  font-weight: 500;
+}
+
+.objective-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.objective-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-neutral-900);
+}
+
+.objective-description {
+  font-size: 0.75rem;
+  color: var(--color-neutral-600);
+  margin: 0;
+  margin-top: 0.25rem;
+}
+
+.aggressiveness-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-lg);
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-neutral-900);
+}
+
+.selector-hint {
+  font-size: 0.875rem;
+  color: var(--color-neutral-600);
+  margin: 0;
+}
+
+.aggressiveness-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.aggressiveness-btn {
+  padding: 1rem;
+  border: 2px solid #d1d5db;
+  border-radius: var(--radius-md);
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.aggressiveness-btn:hover {
+  border-color: #9ca3af;
+  transform: translateY(-2px);
+}
+
+.aggressiveness-btn.active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
+.aggressiveness-number {
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: #3b82f6;
+}
+
+.aggressiveness-btn.active .aggressiveness-number {
+  color: #1d4ed8;
+}
+
+.aggressiveness-name {
+  font-size: 0.75rem;
+  color: var(--color-neutral-700);
+  font-weight: 500;
+}
+
+.delta-info {
+  padding: 0.75rem;
+  background: white;
+  border-left: 3px solid #3b82f6;
+  border-radius: var(--radius-sm);
+}
+
+.delta-info p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-neutral-700);
+}
+
+.targets-display {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.targets-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-neutral-900);
+}
+
+.targets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.target-card {
+  padding: 1rem;
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid #e5e7eb;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.target-card.highlight {
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.target-label {
+  font-size: 0.75rem;
+  color: var(--color-neutral-600);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.target-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.target-unit {
+  font-size: 0.75rem;
+  color: var(--color-neutral-500);
+  font-weight: 500;
+}
+
+.macros-display {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.macros-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-neutral-900);
+}
+
+.macros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.macro-target {
+  padding: 0.875rem;
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.macro-name {
+  font-size: 0.75rem;
+  color: var(--color-neutral-600);
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.macro-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.macro-kcal {
+  font-size: 0.7rem;
+  color: var(--color-neutral-500);
+  font-weight: 500;
+}
+
+.adjustment-info {
+  padding: 0.75rem;
+  background: white;
+  border-left: 3px solid #f59e0b;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.adjustment-info p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-neutral-700);
+  font-weight: 500;
+}
+
+.loading-indicator {
+  padding: 1rem;
+  background: var(--color-neutral-50);
+  border-radius: var(--radius-md);
+  text-align: center;
+  color: var(--color-neutral-600);
+  font-size: 0.875rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .objectives-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .objective-card {
+    min-height: 80px;
+    padding: 0.75rem;
+  }
+  
+  .aggressiveness-options {
+    grid-template-columns: 1fr;
+  }
+  
+  .targets-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .macros-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .objectives-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .targets-display {
+    padding: 1rem;
+  }
+  
+  .targets-title {
+    font-size: 1rem;
+  }
+  
+  .target-value {
+    font-size: 1.5rem;
+  }
+}

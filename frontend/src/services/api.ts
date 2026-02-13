@@ -30,6 +30,8 @@ api.interceptors.response.use(
 )
 
 // Types
+export type FitnessObjective = 'maintenance' | 'fat_loss' | 'muscle_gain' | 'body_recomp' | 'performance'
+
 export interface User {
   id: number
   email: string
@@ -44,6 +46,13 @@ export interface User {
   activity_level?: number
   bmr?: number
   daily_caloric_expenditure?: number
+  // Objective and targets
+  objective?: FitnessObjective
+  aggressiveness_level?: number
+  target_calories?: number
+  protein_target_g?: number
+  fat_target_g?: number
+  carbs_target_g?: number
 }
 
 export interface LoginRequest {
@@ -62,6 +71,9 @@ export interface RegisterRequest {
   weight: number
   height: number
   activity_level: number
+  // Fitness objective (optional at registration)
+  objective?: FitnessObjective
+  aggressiveness_level?: number
 }
 
 export interface BiometricData {
@@ -138,6 +150,14 @@ export const authAPI = {
 
   updateBiometrics: async (biometrics: BiometricData): Promise<User> => {
     const response = await api.put('/users/me/biometrics', biometrics)
+    return response.data
+  },
+
+  updateObjective: async (objective: FitnessObjective, aggressiveness_level: number = 2): Promise<User> => {
+    const response = await api.put('/users/me/objective', {
+      objective,
+      aggressiveness_level
+    })
     return response.data
   },
 }

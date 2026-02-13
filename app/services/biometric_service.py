@@ -2,8 +2,8 @@
 Service layer for biometric calculations and validation
 Separates business logic from controllers and provides reusable components
 """
-from typing import Optional, Tuple
-from ..schemas.user import Gender, ActivityLevel
+from typing import Optional, Tuple, Dict, Any
+from ..schemas.user import Gender, ActivityLevel, FitnessObjective
 from ..constants import BiometricConstants, ErrorMessages
 from ..core.custom_exceptions import BiometricValidationError
 
@@ -252,3 +252,199 @@ class BiometricService:
             gender=gender,
             activity_level=activity_level
         )
+    
+    # ============================================================================
+    # FITNESS OBJECTIVE AND MACRO CALCULATION METHODS
+    # ============================================================================
+    
+    @staticmethod
+    def get_calorie_delta_by_objective(objective: Optional[str], aggressiveness_level: Optional[int] = None) -> float:
+        """
+        Get the calorie delta (multiplier) based on fitness objective and aggressiveness level.
+        
+        Args:
+            objective: The fitness objective (maintenance, fat_loss, muscle_gain, body_recomp, performance)
+            aggressiveness_level: Level 1-3 for objectives that support it (None or 2 for default)
+            
+        Returns:
+            Float representing the delta to multiply TDEE with (e.g., -0.25 for aggressive fat loss)
+        """
+        if not objective:
+            return 0.0
+        
+        # Default to moderate (level 2) if not specified
+        if aggressiveness_level is None:
+            aggressiveness_level = 2
+        
+        objective_lower = objective.lower() if isinstance(objective, str) else objective.value
+        
+        # Define deltas for each objective and aggressiveness level
+        objective_deltas = {
+            'maintenance': {1: 0.00, 2: 0.00, 3: 0.00},
+            'fat_loss': {1: -0.15, 2: -0.20, 3: -0.25},
+            'muscle_gain': {1: 0.05, 2: 0.10, 3: 0.15},
+            'body_recomp': {1: 0.00, 2: -0.05, 3: -0.10},
+            'performance': {1: 0.00, 2: 0.00, 3: 0.05}
+        }
+        
+        return objective_deltas.get(objective_lower, {}).get(aggressiveness_level, 0.0)
+    
+    @staticmethod
+    def get_protein_factor_by_objective(objective: Optional[str]) -> float:
+        """
+        Get the protein factor (g/kg) based on fitness objective.
+        
+        Args:
+            objective: The fitness objective
+            
+        Returns:
+            Float representing grams of protein per kg of body weight
+        """
+        if not objective:
+            return 1.6  # Default to maintenance
+        
+        objective_lower = objective.lower() if isinstance(objective, str) else objective.value
+        
+        protein_factors = {
+            'maintenance': 1.6,
+            'fat_loss': 2.0,
+            'muscle_gain': 1.8,
+            'body_recomp': 2.0,
+            'performance': 1.6
+        }
+        
+        return protein_factors.get(objective_lower, 1.6)
+    
+    @staticmethod
+    def get_fat_percent_by_objective(objective: Optional[str]) -> float:
+        """
+        Get the fat percentage of calories based on fitness objective.
+        
+        Args:
+            objective: The fitness objective
+            
+        Returns:
+            Float representing the percentage of calories from fat (0.0-1.0)
+        """
+        if not objective:
+            return 0.30  # Default to maintenance
+        
+        objective_lower = objective.lower() if isinstance(objective, str) else objective.value
+        
+        fat_percents = {
+            'maintenance': 0.30,
+            'fat_loss': 0.25,
+            'muscle_gain': 0.25,
+            'body_recomp': 0.25,
+            'performance': 0.25
+        }
+        
+        return fat_percents.get(objective_lower, 0.30)
+    
+    @classmethod
+    def calculate_objective_targets(
+        cls,
+        tdee: float,
+        weight_kg: float,
+        objective: Optional[str] = None,
+        aggressiveness_level: Optional[int] = None
+    ) -> Dict[str, float]:
+        """
+        Calculate target calories and macronutrients based on objective.
+        
+        Args:
+            tdee: Total Daily Energy Expenditure (maintenance calories)
+            weight_kg: User's weight in kg
+            objective: The fitness objective
+            aggressiveness_level: Level 1-3 for intensity (None uses default)
+            
+        Returns:
+            Dictionary with target_calories, protein_g, fat_g, carbs_g
+        """
+        # Calculate target calories based on objective delta
+        calorie_delta = cls.get_calorie_delta_by_objective(objective, aggressiveness_level)
+        target_calories = round(tdee * (1 + calorie_delta))
+        
+        # Macronutrient constants
+        PROTEIN_CALS_PER_GRAM = 4
+        FAT_CALS_PER_GRAM = 9
+        CARB_CALS_PER_GRAM = 4
+        
+        # Calculate protein (g/kg based on objective)
+        protein_factor = cls.get_protein_factor_by_objective(objective)
+        protein_g = round(weight_kg * protein_factor)
+        protein_kcal = protein_g * PROTEIN_CALS_PER_GRAM
+        
+        # Calculate fat (percentage based on objective)
+        fat_percent = cls.get_fat_percent_by_objective(objective)
+        fat_kcal = round(target_calories * fat_percent)
+        fat_g = round(fat_kcal / FAT_CALS_PER_GRAM)
+        
+        # Calculate carbs (remainder)
+        carb_kcal = target_calories - protein_kcal - fat_kcal
+        
+        # Ensure carb_kcal is not negative
+        if carb_kcal < 0:
+            # Reduce fat first, down to minimum 20% of calories
+            min_fat_kcal = round(target_calories * 0.20)
+            fat_kcal = min_fat_kcal
+            fat_g = round(fat_kcal / FAT_CALS_PER_GRAM)
+            carb_kcal = target_calories - protein_kcal - fat_kcal
+            
+            # If still negative, reduce protein slightly
+            if carb_kcal < 0:
+                protein_kcal = target_calories - fat_kcal  # Carbs get remainder
+                protein_g = round(protein_kcal / PROTEIN_CALS_PER_GRAM)
+                carb_kcal = 0
+        
+        carbs_g = round(carb_kcal / CARB_CALS_PER_GRAM)
+        
+        return {
+            'target_calories': target_calories,
+            'protein_g': protein_g,
+            'fat_g': fat_g,
+            'carbs_g': carbs_g
+        }
+    
+    @classmethod
+    def calculate_and_store_objective_targets(
+        cls,
+        user_instance: 'User'
+    ) -> Dict[str, Any]:
+        """
+        Calculate and update objective-based targets for a user.
+        
+        Args:
+            user_instance: User model instance with complete biometric data
+            
+        Returns:
+            Dictionary with all calculated targets
+        """
+        # Ensure user has complete data
+        if not user_instance.daily_caloric_expenditure or not user_instance.weight:
+            raise BiometricValidationError(
+                {"objective": "User must have complete biometric data (TDEE and weight)"}
+            )
+        
+        # Calculate targets
+        targets = cls.calculate_objective_targets(
+            tdee=user_instance.daily_caloric_expenditure,
+            weight_kg=user_instance.weight,
+            objective=user_instance.objective,
+            aggressiveness_level=user_instance.aggressiveness_level
+        )
+        
+        # Update user instance
+        user_instance.target_calories = targets['target_calories']
+        user_instance.protein_target_g = targets['protein_g']
+        user_instance.fat_target_g = targets['fat_g']
+        user_instance.carbs_target_g = targets['carbs_g']
+        
+        return {
+            'objective': user_instance.objective,
+            'aggressiveness_level': user_instance.aggressiveness_level,
+            'target_calories': user_instance.target_calories,
+            'protein_target_g': user_instance.protein_target_g,
+            'fat_target_g': user_instance.fat_target_g,
+            'carbs_target_g': user_instance.carbs_target_g
+        }

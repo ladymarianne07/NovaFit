@@ -17,7 +17,9 @@ const VALIDATION_CONSTANTS = {
   MIN_HEIGHT: 100.0,
   MAX_HEIGHT: 250.0,
   VALID_ACTIVITY_LEVELS: [1.20, 1.35, 1.50, 1.65, 1.80],
-  VALID_GENDERS: ['male', 'female']
+  VALID_GENDERS: ['male', 'female'],
+  VALID_OBJECTIVES: ['maintenance', 'fat_loss', 'muscle_gain', 'body_recomp', 'performance'],
+  VALID_AGGRESSIVENESS_LEVELS: [1, 2, 3]
 }
 
 // Error messages matching backend
@@ -32,6 +34,8 @@ const ERROR_MESSAGES = {
   INVALID_HEIGHT_RANGE: `Height must be between ${VALIDATION_CONSTANTS.MIN_HEIGHT} and ${VALIDATION_CONSTANTS.MAX_HEIGHT} cm`,
   INVALID_ACTIVITY_LEVEL: 'Invalid activity level selected',
   INVALID_GENDER: 'Gender must be either male or female',
+  INVALID_OBJECTIVE: 'Invalid fitness objective selected',
+  INVALID_AGGRESSIVENESS_LEVEL: 'Aggressiveness level must be 1 (conservative), 2 (moderate), or 3 (aggressive)',
   FIELD_REQUIRED: 'This field is required'
 }
 
@@ -181,6 +185,38 @@ export class ValidationService {
     
     if (!VALIDATION_CONSTANTS.VALID_GENDERS.includes(gender.toLowerCase())) {
       return { isValid: false, error: ERROR_MESSAGES.INVALID_GENDER }
+    }
+    
+    return { isValid: true }
+  }
+  
+  /**
+   * Validate fitness objective
+   */
+  static validateObjective(objective: string): ValidationResult {
+    if (!objective) {
+      return { isValid: false, error: ERROR_MESSAGES.FIELD_REQUIRED }
+    }
+    
+    if (!VALIDATION_CONSTANTS.VALID_OBJECTIVES.includes(objective.toLowerCase())) {
+      return { isValid: false, error: ERROR_MESSAGES.INVALID_OBJECTIVE }
+    }
+    
+    return { isValid: true }
+  }
+  
+  /**
+   * Validate aggressiveness level (1-3)
+   */
+  static validateAggressivenessLevel(level: number | string): ValidationResult {
+    const levelNum = typeof level === 'string' ? parseInt(level) : level
+    
+    if (isNaN(levelNum)) {
+      return { isValid: false, error: 'Aggressiveness level must be a number' }
+    }
+    
+    if (!VALIDATION_CONSTANTS.VALID_AGGRESSIVENESS_LEVELS.includes(levelNum)) {
+      return { isValid: false, error: ERROR_MESSAGES.INVALID_AGGRESSIVENESS_LEVEL }
     }
     
     return { isValid: true }

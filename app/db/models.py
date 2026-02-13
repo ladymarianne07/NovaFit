@@ -32,6 +32,16 @@ class User(Base):
     bmr = Column(Float, nullable=False)  # Basal Metabolic Rate
     daily_caloric_expenditure = Column(Float, nullable=False)  # BMR * activity_level (TDEE)
     
+    # Fitness objective and personalized targets
+    objective = Column(String(50), nullable=True)  # 'maintenance', 'fat_loss', 'muscle_gain', 'body_recomp', 'performance'
+    aggressiveness_level = Column(Integer, nullable=True)  # 1-3 for applicable objectives
+    
+    # Target values based on objective (automatically computed when objective or aggressiveness changes)
+    target_calories = Column(Float, nullable=True)  # Target daily calories
+    protein_target_g = Column(Float, nullable=True)  # Daily protein target in grams
+    fat_target_g = Column(Float, nullable=True)  # Daily fat target in grams
+    carbs_target_g = Column(Float, nullable=True)  # Daily carbs target in grams
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

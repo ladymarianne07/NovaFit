@@ -20,6 +20,30 @@ class ActivityLevel(float, Enum):
     VERY_ACTIVE = 1.80        # Muy activo
 
 
+class FitnessObjective(str, Enum):
+    """Fitness objectives that affect calorie and macro targets"""
+    MAINTENANCE = "maintenance"      # Maintain current weight
+    FAT_LOSS = "fat_loss"            # Lose weight
+    MUSCLE_GAIN = "muscle_gain"      # Gain muscle
+    BODY_RECOMP = "body_recomp"      # Body recomposition
+    PERFORMANCE = "performance"      # Athletic performance
+
+
+class AggressivenessLevel(int, Enum):
+    """Aggressiveness levels for objectives that support intensity adjustment"""
+    CONSERVATIVE = 1                 # Conservative approach
+    MODERATE = 2                     # Moderate/default approach
+    AGGRESSIVE = 3                   # Aggressive approach
+
+
+class MacronutrientTargets(BaseModel):
+    """Computed macronutrient targets based on objective"""
+    target_calories: float = Field(..., description="Target daily calories based on objective")
+    protein_g: float = Field(..., description="Daily protein target in grams")
+    fat_g: float = Field(..., description="Daily fat target in grams")
+    carbs_g: float = Field(..., description="Daily carbs target in grams")
+
+
 class UserBase(BaseModel):
     """Base user schema"""
     email: EmailStr
@@ -52,11 +76,21 @@ class UserBiometrics(BaseModel):
 
 
 class UserCreate(UserBase, UserBiometrics):
-    """User creation schema with biometric data"""
+    """User creation schema with biometric data and fitness objective"""
     password: str = Field(
         ..., 
         min_length=DatabaseConstants.MIN_PASSWORD_LENGTH, 
         description=f"Password (min {DatabaseConstants.MIN_PASSWORD_LENGTH} characters)"
+    )
+    objective: Optional[FitnessObjective] = Field(
+        None,
+        description="Fitness objective (MAINTENANCE, FAT_LOSS, MUSCLE_GAIN, BODY_RECOMP, PERFORMANCE)"
+    )
+    aggressiveness_level: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3,
+        description="Aggressiveness level (1=conservative, 2=moderate, 3=aggressive) for objectives that support it"
     )
 
 
@@ -109,7 +143,7 @@ class UserBiometricsUpdate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    """User update schema with optional biometric data"""
+    """User update schema with optional biometric data and objective"""
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     # Biometric fields for updates
@@ -133,6 +167,17 @@ class UserUpdate(BaseModel):
         description="Height in cm"
     )
     activity_level: Optional[ActivityLevel] = Field(None, description="Daily activity level")
+    # Objective fields
+    objective: Optional[FitnessObjective] = Field(
+        None,
+        description="Fitness objective"
+    )
+    aggressiveness_level: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3,
+        description="Aggressiveness level for applicable objectives"
+    )
 
 
 class UserResponse(UserBase):
@@ -152,6 +197,14 @@ class UserResponse(UserBase):
     # Calculated values (automatically computed when biometric data is complete)
     bmr: Optional[float] = Field(None, description="Basal Metabolic Rate (kcal/day)")
     daily_caloric_expenditure: Optional[float] = Field(None, description="Total daily energy expenditure (kcal/day)")
+    
+    # Fitness objective and targets
+    objective: Optional[FitnessObjective] = Field(None, description="User's fitness objective")
+    aggressiveness_level: Optional[int] = Field(None, description="Aggressiveness level (1-3) for applicable objectives")
+    target_calories: Optional[float] = Field(None, description="Target daily calories based on objective")
+    protein_target_g: Optional[float] = Field(None, description="Daily protein target in grams")
+    fat_target_g: Optional[float] = Field(None, description="Daily fat target in grams")
+    carbs_target_g: Optional[float] = Field(None, description="Daily carbs target in grams")
     
     model_config = {"from_attributes": True}
 

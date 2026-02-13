@@ -97,12 +97,20 @@ class UserService:
             height=user_data.height,
             activity_level=user_data.activity_level.value if user_data.activity_level else None,
             bmr=bmr,
-            daily_caloric_expenditure=daily_caloric_expenditure
+            daily_caloric_expenditure=daily_caloric_expenditure,
+            objective=user_data.objective.value if user_data.objective else None,
+            aggressiveness_level=user_data.aggressiveness_level
         )
         
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)
+        
+        # STEP 6: Calculate objective-based targets if objective is specified
+        if db_user.objective:
+            objective_targets = BiometricService.calculate_and_store_objective_targets(db_user)
+            self.db.commit()
+            self.db.refresh(db_user)
         
         return db_user
     
@@ -309,3 +317,37 @@ class UserService:
         self.db.commit()
         self.db.refresh(user)
         return user
+    
+    def update_user_objective(
+        self, 
+        user: User, 
+        objective: str, 
+        aggressiveness_level: Optional[int] = None
+    ) -> User:
+        """
+        Update user's fitness objective and recalculate targets
+        
+        Args:
+            user: User instance to update
+            objective: Fitness objective (maintenance, fat_loss, muscle_gain, body_recomp, performance)
+            aggressiveness_level: Optional level 1-3 for intensity (None uses default)
+            
+        Returns:
+            Updated user instance with recalculated targets
+            
+        Raises:
+            ValueError: If user doesn't have complete biometric data
+        """
+        # Store new objective values
+        user.objective = objective
+        user.aggressiveness_level = aggressiveness_level
+        
+        # Calculate and store new targets
+        try:
+            BiometricService.calculate_and_store_objective_targets(user)
+            self.db.commit()
+            self.db.refresh(user)
+            return user
+        except Exception as e:
+            self.db.rollback()
+            raise e
