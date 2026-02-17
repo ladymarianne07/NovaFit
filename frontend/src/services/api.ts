@@ -126,6 +126,17 @@ export interface SuggestionData {
   created_at: string
 }
 
+export interface FoodParseRequest {
+  text: string
+}
+
+export interface FoodParseResponse {
+  food: string
+  quantity_grams: number
+  calories_per_100g: number
+  total_calories: number
+}
+
 export interface LoginResponse {
   access_token: string
   token_type: string
@@ -177,6 +188,13 @@ export const nutritionAPI = {
 
   getSuggestions: async (): Promise<SuggestionData> => {
     const response = await api.get('/nutrition/suggestions')
+    return response.data
+  },
+}
+
+export const foodAPI = {
+  parseAndCalculate: async (payload: FoodParseRequest): Promise<FoodParseResponse> => {
+    const response = await api.post('/food/parse-and-calculate', payload)
     return response.data
   },
 }

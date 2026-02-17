@@ -5,6 +5,7 @@ import BottomNavigation from '../components/BottomNavigation'
 import CalorieTracker from '../components/CalorieTracker'
 import MacronutrientsCard from '../components/MacronutrientsCard'
 import SuggestionCard from '../components/SuggestionCard'
+import NutritionModule from '../components/NutritionModule'
 import { nutritionAPI, MacronutrientData, SuggestionData } from '../services/api'
 
 const Dashboard: React.FC = () => {
@@ -17,8 +18,6 @@ const Dashboard: React.FC = () => {
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
-    // TODO: Implement navigation logic for different tabs
-    console.log('Tab changed to:', tab)
   }
 
   const handleLogout = () => {
@@ -83,41 +82,59 @@ const Dashboard: React.FC = () => {
     return user?.first_name || user?.email?.split('@')[0] || 'User'
   }
 
+  const renderProfileContent = () => (
+    <>
+      {/* Header Section - Welcome + Calorie Tracker */}
+      <div className="dashboard-header">
+        <CalorieTracker
+          userName={getUserDisplayName()}
+          currentCalories={getCurrentCalories()}
+          targetCalories={getTargetCalories()}
+          className="mb-6"
+        />
+      </div>
+
+      {/* Main Content Section */}
+      <div className="dashboard-main-content">
+        {/* Macronutrients Card */}
+        {macroData && (
+          <MacronutrientsCard
+            data={macroData}
+            className="mb-6"
+          />
+        )}
+
+        {/* Suggestion Card */}
+        <SuggestionCard
+          suggestion={suggestion}
+          loading={loading}
+          className="mb-6"
+        />
+      </div>
+
+      {/* Future content will go here */}
+      <div className="dashboard-additional-content">
+        {/* Placeholder for future components */}
+      </div>
+    </>
+  )
+
+  const renderPlaceholderSection = (title: string, description: string) => (
+    <div className="dashboard-main-content">
+      <section className="dashboard-placeholder-card">
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </section>
+    </div>
+  )
+
   return (
     <div className="login-container dashboard-with-navigation">
       <div className="login-content">
-        {/* Header Section - Welcome + Calorie Tracker */}
-        <div className="dashboard-header">
-          <CalorieTracker
-            userName={getUserDisplayName()}
-            currentCalories={getCurrentCalories()}
-            targetCalories={getTargetCalories()}
-            className="mb-6"
-          />
-        </div>
-
-        {/* Main Content Section */}
-        <div className="dashboard-main-content">
-          {/* Macronutrients Card */}
-          {macroData && (
-            <MacronutrientsCard 
-              data={macroData}
-              className="mb-6"
-            />
-          )}
-
-          {/* Suggestion Card */}
-          <SuggestionCard 
-            suggestion={suggestion}
-            loading={loading}
-            className="mb-6"
-          />
-        </div>
-
-        {/* Future content will go here */}
-        <div className="dashboard-additional-content">
-          {/* Placeholder for future components */}
-        </div>
+        {activeTab === 'profile' && renderProfileContent()}
+        {activeTab === 'meals' && <NutritionModule className="mb-6" />}
+        {activeTab === 'training' && renderPlaceholderSection('Entrenamiento', 'Próximamente vamos a sumar el plan de entrenamiento y seguimiento de sesiones.')}
+        {activeTab === 'progress' && renderPlaceholderSection('Progreso', 'Próximamente vamos a sumar métricas, evolución corporal y tendencias.')}
       </div>
 
       {/* Bottom Navigation */}

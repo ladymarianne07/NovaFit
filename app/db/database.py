@@ -2,6 +2,7 @@ import logging
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base
+from ..models.food import FoodEntry  # noqa: F401 - ensure model registration
 from ..config import settings
 
 

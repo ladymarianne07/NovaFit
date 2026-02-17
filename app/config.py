@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     
     # Tunnel settings (for documentation)
     TUNNEL_URL: Optional[str] = None  # Set when using ngrok/cloudflare tunnel
+
+    # External nutrition provider API keys
+    USDA_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     
     class Config:
         env_file = ".env"

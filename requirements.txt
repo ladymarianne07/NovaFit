@@ -12,3 +12,4 @@ python-dotenv==1.0.0  # Environment variables
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2  # Test client
+rapidfuzz==3.10.1  # Similarity scoring for USDA result ranking
