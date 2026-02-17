@@ -254,7 +254,7 @@ describe('Register Page - Design System Integration', () => {
     test('shows glassmorphism styled progress indicator', () => {
       render(<RegisterWrapper />)
 
-      expect(screen.getByText(/step 1 of 2/i)).toBeInTheDocument()
+      expect(screen.getByText(/step 1 of 3/i)).toBeInTheDocument()
       
       // Progress bar should have glassmorphism styling
       const progressContainer = document.querySelector('.w-full.bg-gray-700.bg-opacity-30')
@@ -270,7 +270,7 @@ describe('Register Page - Design System Integration', () => {
       render(<RegisterWrapper />)
 
       // Try to submit empty form
-      fireEvent.click(screen.getByRole('button', { name: /continue to profile setup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
 
       await waitFor(() => {
         const errorContainer = document.querySelector('.login-error')

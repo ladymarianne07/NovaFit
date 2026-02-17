@@ -35,7 +35,8 @@ export const Input: React.FC<InputProps> = ({
         <input
           id={props.id || label.toLowerCase().replace(/\s+/g, '-')}
           type={inputType}
-          className={`login-input ${className}`}
+          className={`login-input ${error ? 'error' : ''} ${className}`.trim()}
+          aria-invalid={Boolean(error)}
           {...props}
         />
         
@@ -44,7 +45,7 @@ export const Input: React.FC<InputProps> = ({
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="login-password-toggle"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             tabIndex={0}
           >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

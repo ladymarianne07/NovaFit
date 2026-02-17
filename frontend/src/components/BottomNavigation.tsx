@@ -39,7 +39,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
     },
     {
       id: 'logout',
-      label: 'Logout',
+      label: 'Salir',
       icon: LogOut,
       onClick: onLogout
     }

@@ -1,7 +1,21 @@
-from sqlalchemy import create_engine
+import logging
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base
 from ..config import settings
+
+
+logger = logging.getLogger(__name__)
+
+
+REQUIRED_USER_COLUMNS: dict[str, str] = {
+    "objective": "VARCHAR(50)",
+    "aggressiveness_level": "INTEGER",
+    "target_calories": "REAL",
+    "protein_target_g": "REAL",
+    "fat_target_g": "REAL",
+    "carbs_target_g": "REAL",
+}
 
 
 # Create database engine
@@ -33,8 +47,53 @@ def get_database_session() -> Session:
 
 
 def create_tables():
-    """Create all database tables"""
+    """Create all database tables and ensure backward-compatible schema updates."""
     Base.metadata.create_all(bind=engine)
+    ensure_schema_compatibility()
+
+
+def ensure_schema_compatibility() -> None:
+    """
+    Ensure local SQLite schema remains compatible with current models.
+
+    This avoids runtime failures on existing databases created before
+    new columns were introduced (for example, users.objective).
+    """
+    if "sqlite" not in settings.DATABASE_URL:
+        return
+
+    missing_columns = get_missing_user_columns()
+
+    if not missing_columns:
+        return
+
+    logger.info("Detected missing users columns: %s", ", ".join(missing_columns))
+
+    with engine.begin() as connection:
+        for column_name in missing_columns:
+            column_type = REQUIRED_USER_COLUMNS[column_name]
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
+            logger.info("Added missing column users.%s", column_name)
+
+
+def get_missing_user_columns() -> list[str]:
+    """Return missing required columns in users table for SQLite databases."""
+    if "sqlite" not in settings.DATABASE_URL:
+        return []
+
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    if "users" not in table_names:
+        return list(REQUIRED_USER_COLUMNS.keys())
+
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+
+    return [
+        column_name
+        for column_name in REQUIRED_USER_COLUMNS.keys()
+        if column_name not in existing_columns
+    ]
 
 
 def drop_tables():

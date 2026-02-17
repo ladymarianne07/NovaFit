@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import BottomNavigation from '../components/BottomNavigation'
 import CalorieTracker from '../components/CalorieTracker'
@@ -7,7 +8,8 @@ import SuggestionCard from '../components/SuggestionCard'
 import { nutritionAPI, MacronutrientData, SuggestionData } from '../services/api'
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('profile')
   const [macroData, setMacroData] = useState<MacronutrientData | null>(null)
   const [suggestion, setSuggestion] = useState<SuggestionData | null>(null)
@@ -17,6 +19,11 @@ const Dashboard: React.FC = () => {
     setActiveTab(tab)
     // TODO: Implement navigation logic for different tabs
     console.log('Tab changed to:', tab)
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
   }
 
   // Load nutrition data on component mount
@@ -117,6 +124,7 @@ const Dashboard: React.FC = () => {
       <BottomNavigation 
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        onLogout={handleLogout}
       />
     </div>
   )

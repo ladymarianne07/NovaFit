@@ -1,18 +1,22 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, User, Zap, Scale, Activity, Calendar, Ruler } from 'lucide-react'
+import { Mail, Lock, User, Zap, Scale, Activity, Calendar, Ruler, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/UI/Button'
 import { FormField } from '../components/UI/FormField'
+import CustomSelect from '../components/UI/CustomSelect'
 import { ValidationService } from '../services/validation'
+import { useToast } from '../contexts/ToastContext'
+import { requiredFieldMessage, translateValidationMessage } from '../services/validationMessages'
 import ObjectiveForm from '../components/ObjectiveForm'
 import { FitnessObjective } from '../services/api'
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1)
+  const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward')
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [step1Errors, setStep1Errors] = useState<Record<string, string>>({})
+  const [step2Errors, setStep2Errors] = useState<Record<string, string>>({})
 
   // Form data
   const [email, setEmail] = useState('')
@@ -32,104 +36,186 @@ const Register: React.FC = () => {
   const [objective, setObjective] = useState<FitnessObjective | undefined>(undefined)
   const [aggressiveness, setAggressiveness] = useState(2)
 
-  const { register, updateBiometrics } = useAuth()
+  const { register } = useAuth()
+  const { showError, showSuccess } = useToast()
+
+  const goToStep = (nextStep: number) => {
+    setStepDirection(nextStep > step ? 'forward' : 'backward')
+    setStep(nextStep)
+  }
 
   const validateStep1 = () => {
-    // Use ValidationService for consistent validation
+    const errors: Record<string, string> = {}
+
+    if (!firstName.trim()) {
+      errors.firstName = requiredFieldMessage('El nombre')
+    }
+
+    if (!lastName.trim()) {
+      errors.lastName = requiredFieldMessage('El apellido')
+    }
+
+    if (!email.trim()) {
+      errors.email = requiredFieldMessage('El correo electrónico')
+    }
+
+    if (!password.trim()) {
+      errors.password = requiredFieldMessage('La contraseña')
+    }
+
+    if (!confirmPassword.trim()) {
+      errors.confirmPassword = requiredFieldMessage('La confirmación de contraseña')
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setStep1Errors(errors)
+      showError(Object.values(errors)[0], 'Completa los campos requeridos')
+      return false
+    }
+
     const emailResult = ValidationService.validateEmail(email)
     if (!emailResult.isValid) {
-      setError(emailResult.error!)
+      const message = translateValidationMessage(emailResult.error)
+      setStep1Errors({ email: message })
+      showError(message, 'Correo electrónico inválido')
       return false
     }
     
     const passwordResult = ValidationService.validatePassword(password)
     if (!passwordResult.isValid) {
-      setError(passwordResult.error!)
-      return false
-    }
-    
-    if (!confirmPassword) {
-      setError('Please confirm your password')
+      const message = translateValidationMessage(passwordResult.error)
+      setStep1Errors({ password: message })
+      showError(message, 'Contraseña inválida')
       return false
     }
     
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      const message = translateValidationMessage('Passwords do not match')
+      setStep1Errors({ confirmPassword: message })
+      showError(message, 'Contraseñas no coinciden')
       return false
     }
     
     const firstNameResult = ValidationService.validateName(firstName)
     if (!firstNameResult.isValid) {
-      setError(`First name: ${firstNameResult.error}`)
+      const message = translateValidationMessage(firstNameResult.error)
+      setStep1Errors({ firstName: message })
+      showError(message, 'Nombre inválido')
       return false
     }
     
     const lastNameResult = ValidationService.validateName(lastName)
     if (!lastNameResult.isValid) {
-      setError(`Last name: ${lastNameResult.error}`)
+      const message = translateValidationMessage(lastNameResult.error)
+      setStep1Errors({ lastName: message })
+      showError(message, 'Apellido inválido')
       return false
     }
+
+    setStep1Errors({})
     
     return true
   }
 
   const validateStep2 = () => {
-    // Use ValidationService for biometric data validation  
+    const errors: Record<string, string> = {}
+
+    if (!age.trim()) {
+      errors.age = requiredFieldMessage('La edad')
+    }
+
+    if (!gender.trim()) {
+      errors.gender = requiredFieldMessage('El género')
+    }
+
+    if (!weight.trim()) {
+      errors.weight = requiredFieldMessage('El peso')
+    }
+
+    if (!height.trim()) {
+      errors.height = requiredFieldMessage('La altura')
+    }
+
+    if (!activityLevel.trim()) {
+      errors.activityLevel = requiredFieldMessage('El nivel de actividad')
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setStep2Errors(errors)
+      showError(Object.values(errors)[0], 'Completa tu perfil biométrico')
+      return false
+    }
+
     const ageResult = ValidationService.validateAge(age)
     if (!ageResult.isValid) {
-      setError(ageResult.error!)
+      const message = translateValidationMessage(ageResult.error)
+      setStep2Errors({ age: message })
+      showError(message, 'Edad inválida')
       return false
     }
     
     const genderResult = ValidationService.validateGender(gender)
     if (!genderResult.isValid) {
-      setError(genderResult.error!)
+      const message = translateValidationMessage(genderResult.error)
+      setStep2Errors({ gender: message })
+      showError(message, 'Género inválido')
       return false
     }
     
     const weightResult = ValidationService.validateWeight(weight)
     if (!weightResult.isValid) {
-      setError(weightResult.error!)
+      const message = translateValidationMessage(weightResult.error)
+      setStep2Errors({ weight: message })
+      showError(message, 'Peso inválido')
       return false
     }
     
     const heightResult = ValidationService.validateHeight(height)
     if (!heightResult.isValid) {
-      setError(heightResult.error!)
+      const message = translateValidationMessage(heightResult.error)
+      setStep2Errors({ height: message })
+      showError(message, 'Altura inválida')
       return false
     }
     
     const activityResult = ValidationService.validateActivityLevel(activityLevel)
     if (!activityResult.isValid) {
-      setError(activityResult.error!)
+      const message = translateValidationMessage(activityResult.error)
+      setStep2Errors({ activityLevel: message })
+      showError(message, 'Actividad inválida')
       return false
     }
+
+    setStep2Errors({})
     
     return true
   }
 
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
     
     if (validateStep1()) {
-      setStep(2)
+      goToStep(2)
     }
   }
 
   const handleStep2Submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
     
     if (!validateStep2()) return
 
     // Move to step 3 (objective) instead of registering immediately
-    setStep(3)
+    goToStep(3)
   }
 
   const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+
+    if (!objective) {
+      showError('Selecciona un objetivo para continuar', 'Falta completar el objetivo')
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -150,19 +236,25 @@ const Register: React.FC = () => {
         objective: objective,
         aggressiveness_level: objective ? aggressiveness : undefined
       })
+      showSuccess('Tu cuenta se creó correctamente', '¡Registro completado!')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.')
+      const detail = err?.response?.data?.detail
+      const message = typeof detail === 'string'
+        ? translateValidationMessage(detail)
+        : 'No pudimos completar tu registro. Inténtalo nuevamente.'
+
+      showError(message, 'Error al registrar')
     } finally {
       setIsLoading(false)
     }
   }
 
   const activityLevels = [
-    { value: '1.20', label: 'Sedentary', desc: 'Little to no exercise' },
-    { value: '1.35', label: 'Lightly Active', desc: 'Light exercise 1-3 days/week' },
-    { value: '1.50', label: 'Moderately Active', desc: 'Moderate exercise 3-5 days/week' },
-    { value: '1.65', label: 'Active', desc: 'Heavy exercise 6-7 days/week' },
-    { value: '1.80', label: 'Very Active', desc: 'Very heavy exercise, physical job' }
+    { value: '1.20', label: 'Sedentario', desc: 'Poco o nada de ejercicio' },
+    { value: '1.35', label: 'Ligeramente activo', desc: 'Ejercicio ligero 1-3 días/semana' },
+    { value: '1.50', label: 'Moderadamente activo', desc: 'Ejercicio moderado 3-5 días/semana' },
+    { value: '1.65', label: 'Activo', desc: 'Ejercicio intenso 6-7 días/semana' },
+    { value: '1.80', label: 'Muy activo', desc: 'Ejercicio muy intenso o trabajo físico' }
   ]
 
   return (
@@ -212,12 +304,7 @@ const Register: React.FC = () => {
 
         {/* Registration Form */}
         <form onSubmit={step === 1 ? handleStep1Submit : step === 2 ? handleStep2Submit : handleStep3Submit} className="login-form">
-          {error && (
-            <div className="login-error">
-              <p className="text-red-300 text-sm text-center">{error}</p>
-            </div>
-          )}
-
+          <div key={step} className={`register-step-panel ${stepDirection === 'backward' ? 'register-step-backward' : 'register-step-forward'}`}>
           {step === 1 ? (
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -226,16 +313,30 @@ const Register: React.FC = () => {
                   label="Nombre"
                   type="text"
                   value={firstName}
-                  onChange={(value) => setFirstName(value)}
+                  onChange={(value) => {
+                    setFirstName(value)
+                    if (step1Errors.firstName) {
+                      setStep1Errors((prev) => ({ ...prev, firstName: '' }))
+                    }
+                  }}
                   icon={<User className="w-5 h-5" />}
+                  placeholder="Ingresa tu nombre"
+                  error={step1Errors.firstName}
                 />
                 <FormField
                   id="lastName"
                   label="Apellido"
                   type="text"
                   value={lastName}
-                  onChange={(value) => setLastName(value)}
+                  onChange={(value) => {
+                    setLastName(value)
+                    if (step1Errors.lastName) {
+                      setStep1Errors((prev) => ({ ...prev, lastName: '' }))
+                    }
+                  }}
                   icon={<User className="w-5 h-5" />}
+                  placeholder="Ingresa tu apellido"
+                  error={step1Errors.lastName}
                 />
               </div>
 
@@ -244,9 +345,15 @@ const Register: React.FC = () => {
                 label="Correo Electrónico"
                 type="email"
                 value={email}
-                onChange={(value) => setEmail(value)}
+                onChange={(value) => {
+                  setEmail(value)
+                  if (step1Errors.email) {
+                    setStep1Errors((prev) => ({ ...prev, email: '' }))
+                  }
+                }}
                 icon={<Mail className="w-5 h-5" />}
                 placeholder="Introduce tu correo electrónico"
+                error={step1Errors.email}
                 required
               />
 
@@ -255,10 +362,16 @@ const Register: React.FC = () => {
                 label="Contraseña"
                 type="password"
                 value={password}
-                onChange={(value) => setPassword(value)}
+                onChange={(value) => {
+                  setPassword(value)
+                  if (step1Errors.password) {
+                    setStep1Errors((prev) => ({ ...prev, password: '' }))
+                  }
+                }}
                 icon={<Lock className="w-5 h-5" />}
                 placeholder="Crea una contraseña"
                 showPasswordToggle
+                error={step1Errors.password}
                 required
               />
 
@@ -267,9 +380,15 @@ const Register: React.FC = () => {
                 label="Confirmar Contraseña"
                 type="password"
                 value={confirmPassword}
-                onChange={(value) => setConfirmPassword(value)}
+                onChange={(value) => {
+                  setConfirmPassword(value)
+                  if (step1Errors.confirmPassword) {
+                    setStep1Errors((prev) => ({ ...prev, confirmPassword: '' }))
+                  }
+                }}
                 icon={<Lock className="w-5 h-5" />}
                 placeholder="Confirma tu contraseña"
+                error={step1Errors.confirmPassword}
                 required
               />
 
@@ -282,38 +401,41 @@ const Register: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   id="age"
-                  label="Age"
+                  label="Edad"
                   type="number"
                   value={age}
-                  onChange={(value) => setAge(value)}
+                  onChange={(value) => {
+                    setAge(value)
+                    if (step2Errors.age) {
+                      setStep2Errors((prev) => ({ ...prev, age: '' }))
+                    }
+                  }}
                   icon={<Calendar className="w-5 h-5" />}
                   placeholder="25"
+                  error={step2Errors.age}
                   min={13}
                   max={120}
                   required
                 />
-
-                <div className="login-field">
-                  <label htmlFor="gender" className="login-label">
-                    Género *
-                  </label>
-                  <div className="login-input-container">
-                    <div className="login-input-icon">
-                      <User className="w-5 h-5" />
-                    </div>
-                    <select
-                      id="gender"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                      className="login-input"
-                      required
-                    >
-                      <option value="">Selecciona</option>
-                      <option value="male">Masculino</option>
-                      <option value="female">Femenino</option>
-                    </select>
-                  </div>
-                </div>
+                <CustomSelect
+                  id="gender"
+                  label="Género"
+                  value={gender}
+                  onChange={(selectedValue) => {
+                    setGender(selectedValue as 'male' | 'female')
+                    if (step2Errors.gender) {
+                      setStep2Errors((prev) => ({ ...prev, gender: '' }))
+                    }
+                  }}
+                  icon={<User className="w-5 h-5" />}
+                  placeholder="Selecciona"
+                  required
+                  error={step2Errors.gender}
+                  options={[
+                    { value: 'male', label: 'Masculino' },
+                    { value: 'female', label: 'Femenino' }
+                  ]}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -322,9 +444,15 @@ const Register: React.FC = () => {
                   label="Peso (kg)"
                   type="number"
                   value={weight}
-                  onChange={(value) => setWeight(value)}
+                  onChange={(value) => {
+                    setWeight(value)
+                    if (step2Errors.weight) {
+                      setStep2Errors((prev) => ({ ...prev, weight: '' }))
+                    }
+                  }}
                   icon={<Scale className="w-5 h-5" />}
                   placeholder="70"
+                  error={step2Errors.weight}
                   min={30}
                   max={300}
                   step={0.1}
@@ -336,9 +464,15 @@ const Register: React.FC = () => {
                   label="Altura (cm)"
                   type="number"
                   value={height}
-                  onChange={(value) => setHeight(value)}
+                  onChange={(value) => {
+                    setHeight(value)
+                    if (step2Errors.height) {
+                      setStep2Errors((prev) => ({ ...prev, height: '' }))
+                    }
+                  }}
                   icon={<Ruler className="w-5 h-5" />}
                   placeholder="175"
+                  error={step2Errors.height}
                   min={100}
                   max={250}
                   step={0.1}
@@ -346,38 +480,35 @@ const Register: React.FC = () => {
                 />
               </div>
 
-              <div className="login-field">
-                <label htmlFor="activityLevel" className="login-label">
-                  Nivel de Actividad *
-                </label>
-                <div className="login-input-container">
-                  <div className="login-input-icon">
-                    <Activity className="w-5 h-5" />
-                  </div>
-                  <select
-                    id="activityLevel"
-                    value={activityLevel}
-                    onChange={(e) => setActivityLevel(e.target.value)}
-                    className="login-input"
-                    required
-                  >
-                    <option value="">Selecciona tu nivel de actividad</option>
-                    {activityLevels.map((level) => (
-                      <option key={level.value} value={level.value}>
-                        {level.label} - {level.desc}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <CustomSelect
+                id="activityLevel"
+                label="Nivel de Actividad"
+                value={activityLevel}
+                onChange={(selectedValue) => {
+                  setActivityLevel(selectedValue)
+                  if (step2Errors.activityLevel) {
+                    setStep2Errors((prev) => ({ ...prev, activityLevel: '' }))
+                  }
+                }}
+                icon={<Activity className="w-5 h-5" />}
+                placeholder="Selecciona tu nivel de actividad"
+                required
+                error={step2Errors.activityLevel}
+                options={activityLevels.map((level) => ({
+                  value: level.value,
+                  label: level.label,
+                  description: level.desc
+                }))}
+              />
 
               <div className="flex gap-3">
                 <Button
                   type="button"
-                  variant="secondary"
-                  onClick={() => setStep(1)}
+                  variant="primary"
+                  onClick={() => goToStep(1)}
                   disabled={isLoading}
-                  className="flex-1"
+                  icon={<ArrowLeft className="w-4 h-4" />}
+                  className="flex-1 login-button-back"
                 >
                   Atrás
                 </Button>
@@ -397,8 +528,6 @@ const Register: React.FC = () => {
               <ObjectiveForm
                 selectedObjective={objective}
                 selectedAggressiveness={aggressiveness}
-                tdee={parseFloat(activityLevel) * (10 * parseFloat(weight) + 6.25 * parseFloat(height) - 5 * parseInt(age) + (gender === 'male' ? 5 : -161))}
-                weight={parseFloat(weight) || 70}
                 onObjectiveChange={(obj, agg) => {
                   setObjective(obj)
                   setAggressiveness(agg)
@@ -408,10 +537,11 @@ const Register: React.FC = () => {
               <div className="flex gap-3">
                 <Button
                   type="button"
-                  variant="secondary"
-                  onClick={() => setStep(2)}
+                  variant="primary"
+                  onClick={() => goToStep(2)}
                   disabled={isLoading}
-                  className="flex-1"
+                  icon={<ArrowLeft className="w-4 h-4" />}
+                  className="flex-1 login-button-back"
                 >
                   Atrás
                 </Button>
@@ -431,6 +561,7 @@ const Register: React.FC = () => {
               </p>
             </div>
           ) : null}
+          </div>
 
           <div className="login-register">
             <p className="login-register-text">

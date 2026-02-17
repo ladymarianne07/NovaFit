@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 
 from .config import settings
 from .api import auth, users, events, nutrition
-from .db.database import create_tables
+from .db.database import create_tables, get_missing_user_columns
 from .constants import AppConstants, StatusCodes
 from .core.custom_exceptions import (
     NovaFitnessException, 
@@ -253,9 +253,15 @@ def setup_routes(app: FastAPI) -> None:
     @app.get("/health")
     async def health_check():
         """Detailed health check with actual timestamp"""
+        missing_user_columns = get_missing_user_columns()
+
         return {
             "status": AppConstants.STATUS_HEALTHY,
             "database": AppConstants.STATUS_CONNECTED,
+            "schema": {
+                "status": "compatible" if not missing_user_columns else "out_of_sync",
+                "missing_user_columns": missing_user_columns,
+            },
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "version": settings.VERSION
         }

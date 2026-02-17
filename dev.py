@@ -65,15 +65,12 @@ def run_migrations():
     """Run database migrations"""
     print("🔄 Running database migrations...")
     try:
-        # Add migrations directory to path
-        migrations_path = project_root / "migrations"
-        if str(migrations_path) not in sys.path:
-            sys.path.insert(0, str(migrations_path))
-        
-        # Import and run the migration
-        print("Running migration 002: Update user schema for complete registration...")
-        import migration_002_update_user_schema_complete_registration as migration_002
-        migration_002.upgrade()
+        from app.db.database import create_tables, ensure_schema_compatibility
+
+        # Ensure tables exist first, then apply compatibility updates
+        create_tables()
+        ensure_schema_compatibility()
+
         print("✅ Migrations completed successfully!")
     except Exception as e:
         print(f"❌ Migration failed: {e}")

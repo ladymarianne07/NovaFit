@@ -2,28 +2,74 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, Zap } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
+import { ValidationService } from '../services/validation'
+import { requiredFieldMessage, translateValidationMessage } from '../services/validationMessages'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
 
   const { login } = useAuth()
+  const { showError, showSuccess } = useToast()
+
+  const validateFields = () => {
+    const nextErrors: { email?: string; password?: string } = {}
+
+    if (!email.trim()) {
+      nextErrors.email = requiredFieldMessage('El correo electrónico')
+    } else {
+      const emailResult = ValidationService.validateEmail(email)
+      if (!emailResult.isValid) {
+        nextErrors.email = translateValidationMessage(emailResult.error)
+      }
+    }
+
+    if (!password.trim()) {
+      nextErrors.password = requiredFieldMessage('La contraseña')
+    }
+
+    setFieldErrors(nextErrors)
+
+    const firstError = nextErrors.email || nextErrors.password
+    if (firstError) {
+      showError(firstError, 'Revisa los datos del login')
+      return false
+    }
+
+    return true
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!validateFields()) {
+      return
+    }
+
     setIsLoading(true)
-    setError('')
 
     try {
       await login({
         email,
         password
       })
+      showSuccess('Has iniciado sesión correctamente', '¡Bienvenido de nuevo!')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.')
+      const detail = err?.response?.data?.detail
+      const message = typeof detail === 'string'
+        ? translateValidationMessage(detail)
+        : 'No pudimos iniciar sesión. Verifica tus credenciales e inténtalo nuevamente.'
+
+      setFieldErrors({
+        email: 'Revisa tu correo electrónico',
+        password: 'Revisa tu contraseña'
+      })
+
+      showError(message, 'Error de autenticación')
     } finally {
       setIsLoading(false)
     }
@@ -50,12 +96,6 @@ const Login: React.FC = () => {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="login-form">
-          {error && (
-            <div className="login-error">
-              <p className="text-red-300 text-sm text-center">{error}</p>
-            </div>
-          )}
-
           {/* Email Field */}
           <div className="login-field">
             <label htmlFor="email" className="login-label">
@@ -67,12 +107,20 @@ const Login: React.FC = () => {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="login-input"
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (fieldErrors.email) {
+                    setFieldErrors((prev) => ({ ...prev, email: undefined }))
+                  }
+                }}
+                placeholder="Ingresa tu correo electrónico"
+                className={`login-input ${fieldErrors.email ? 'error' : ''}`}
+                aria-invalid={Boolean(fieldErrors.email)}
                 required
                 disabled={isLoading}
               />
             </div>
+            {fieldErrors.email && <span className="login-field-error">{fieldErrors.email}</span>}
           </div>
 
           {/* Password Field */}
@@ -86,8 +134,15 @@ const Login: React.FC = () => {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="login-input"
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (fieldErrors.password) {
+                    setFieldErrors((prev) => ({ ...prev, password: undefined }))
+                  }
+                }}
+                placeholder="Ingresa tu contraseña"
+                className={`login-input ${fieldErrors.password ? 'error' : ''}`}
+                aria-invalid={Boolean(fieldErrors.password)}
                 required
                 disabled={isLoading}
               />
@@ -100,6 +155,7 @@ const Login: React.FC = () => {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            {fieldErrors.password && <span className="login-field-error">{fieldErrors.password}</span>}
           </div>
 
           {/* Sign In Button */}
