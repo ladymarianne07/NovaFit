@@ -9,11 +9,23 @@ interface NutritionModuleProps {
 interface MealEntry {
   id: string
   title: string
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
   source: 'ia'
   createdAt: string
   dateKey: string
-  quantityGrams: number
   totalCalories: number
+  totalCarbs: number
+  totalProtein: number
+  totalFat: number
+  itemsSummary: string
+}
+
+const MEAL_TYPE_LABELS: Record<MealEntry['mealType'], string> = {
+  breakfast: 'Desayuno',
+  lunch: 'Almuerzo',
+  dinner: 'Cena',
+  snack: 'Snack',
+  meal: 'Comida'
 }
 
 const STORAGE_KEYS = {
@@ -54,19 +66,35 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
   }, [allMeals])
 
   const todayMeals = useMemo(
-    () => allMeals.filter((meal) => meal.dateKey === todayKey),
+    () =>
+      allMeals
+        .filter((meal) => meal.dateKey === todayKey)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [allMeals, todayKey]
   )
 
-  const addMeal = (entry: { title: string; quantityGrams: number; totalCalories: number }) => {
+  const addMeal = (entry: {
+    title: string
+    mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
+    createdAt: string
+    totalCalories: number
+    totalCarbs: number
+    totalProtein: number
+    totalFat: number
+    itemsSummary: string
+  }) => {
     const newMeal: MealEntry = {
-      id: `meal-${Date.now()}`,
+      id: `meal-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
       title: entry.title,
+      mealType: entry.mealType,
       source: 'ia',
-      createdAt: new Date().toISOString(),
+      createdAt: entry.createdAt,
       dateKey: todayKey,
-      quantityGrams: entry.quantityGrams,
-      totalCalories: entry.totalCalories
+      totalCalories: entry.totalCalories,
+      totalCarbs: entry.totalCarbs,
+      totalProtein: entry.totalProtein,
+      totalFat: entry.totalFat,
+      itemsSummary: entry.itemsSummary
     }
 
     setAllMeals((previousMeals) => [newMeal, ...previousMeals])
@@ -80,13 +108,22 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       setIsSubmitting(true)
       setErrorMessage('')
 
-      const parsed = await foodAPI.parseAndCalculate({ text: content })
+      const parsed = await foodAPI.parseAndLog({ text: content })
 
-      addMeal({
-        title: parsed.food,
-        quantityGrams: parsed.quantity_grams,
-        totalCalories: parsed.total_calories
+      parsed.meals.forEach((meal) => {
+        addMeal({
+          title: meal.meal_label,
+          mealType: meal.meal_type,
+          createdAt: meal.meal_timestamp,
+          totalCalories: meal.total_calories,
+          totalCarbs: meal.total_carbs,
+          totalProtein: meal.total_protein,
+          totalFat: meal.total_fat,
+          itemsSummary: meal.items.map((item) => item.food).join(', ')
+        })
       })
+
+      window.dispatchEvent(new Event('nutrition:updated'))
 
       setAiMealInput('')
       setIsAiComposerOpen(false)
@@ -97,6 +134,8 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
         setErrorMessage('No pude interpretar la cantidad. Probá con más detalle o una porción.')
       } else if (backendError?.error === 'invalid_domain') {
         setErrorMessage('Ese texto no parece una comida. Ingresá un alimento o plato.')
+      } else if (backendError?.detail === 'gemini_quota_exceeded') {
+        setErrorMessage('Se alcanzó el límite diario de uso de IA. Probá nuevamente más tarde o con otra API key/proyecto.')
       } else if (backendError?.detail === 'missing_gemini_api_key') {
         setErrorMessage('Falta configurar GEMINI_API_KEY en el backend.')
       } else if (backendError?.detail === 'missing_usda_api_key') {
@@ -112,6 +151,8 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
   const clearMeals = () => {
     setAllMeals((previousMeals) => previousMeals.filter((meal) => meal.dateKey !== todayKey))
   }
+
+  const formatMacro = (value: number) => Math.round(value)
 
   return (
     <section className={`nutrition-module ${className}`.trim()} aria-label="Módulo de alimentación">
@@ -182,9 +223,15 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
         ) : (
           <div className="nutrition-meals-list">
             {todayMeals.map((meal) => (
-              <button key={meal.id} type="button" className="nutrition-meal-item">
-                <div className="nutrition-meal-main">
-                  <p className="nutrition-meal-name">{meal.title}</p>
+              <article key={meal.id} className="nutrition-meal-item">
+                <div className="nutrition-meal-top">
+                  <div className="nutrition-meal-title-group">
+                    <p className="nutrition-meal-name">{meal.title}</p>
+                    <span className={`nutrition-meal-type-badge ${meal.mealType}`}>
+                      {MEAL_TYPE_LABELS[meal.mealType]}
+                    </span>
+                  </div>
+
                   <span className="nutrition-meal-time">
                     {new Date(meal.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
@@ -192,12 +239,30 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
                     })}
                   </span>
                 </div>
-                <div className="nutrition-meal-macros">
-                  <span>{meal.quantityGrams} g</span>
-                  <span>{meal.totalCalories} kcal</span>
-                  <span>IA</span>
+
+                <p className="nutrition-meal-items-line">
+                  <strong>Alimentos:</strong> {meal.itemsSummary}
+                </p>
+
+                <div className="nutrition-meal-macro-grid">
+                  <div className="nutrition-macro-pill calories">
+                    <span className="nutrition-macro-label">Calorías</span>
+                    <span className="nutrition-macro-value">{meal.totalCalories.toFixed(0)} kcal</span>
+                  </div>
+                  <div className="nutrition-macro-pill carbs">
+                    <span className="nutrition-macro-label">Carbohidratos</span>
+                    <span className="nutrition-macro-value">{formatMacro(meal.totalCarbs)} g</span>
+                  </div>
+                  <div className="nutrition-macro-pill protein">
+                    <span className="nutrition-macro-label">Proteínas</span>
+                    <span className="nutrition-macro-value">{formatMacro(meal.totalProtein)} g</span>
+                  </div>
+                  <div className="nutrition-macro-pill fat">
+                    <span className="nutrition-macro-label">Grasas</span>
+                    <span className="nutrition-macro-value">{formatMacro(meal.totalFat)} g</span>
+                  </div>
                 </div>
-              </button>
+              </article>
             ))}
           </div>
         )}

@@ -134,7 +134,47 @@ export interface FoodParseResponse {
   food: string
   quantity_grams: number
   calories_per_100g: number
+  carbs_per_100g: number
+  protein_per_100g: number
+  fat_per_100g: number
   total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
+}
+
+export interface FoodItemDistribution {
+  food: string
+  quantity_grams: number
+  calories_per_100g: number
+  carbs_per_100g: number
+  protein_per_100g: number
+  fat_per_100g: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
+}
+
+export interface ParsedMeal {
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
+  meal_label: string
+  meal_timestamp: string
+  items: FoodItemDistribution[]
+  total_quantity_grams: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
+}
+
+export interface FoodParseLogResponse {
+  meals: ParsedMeal[]
+  total_quantity_grams: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
 }
 
 export interface LoginResponse {
@@ -195,6 +235,11 @@ export const nutritionAPI = {
 export const foodAPI = {
   parseAndCalculate: async (payload: FoodParseRequest): Promise<FoodParseResponse> => {
     const response = await api.post('/food/parse-and-calculate', payload)
+    return response.data
+  },
+
+  parseAndLog: async (payload: FoodParseRequest): Promise<FoodParseLogResponse> => {
+    const response = await api.post('/food/parse-and-log', payload)
     return response.data
   },
 }

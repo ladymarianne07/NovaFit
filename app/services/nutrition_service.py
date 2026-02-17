@@ -205,6 +205,7 @@ class NutritionService:
         """
         # Calculate nutritional values for consumed quantity
         quantity_ratio = meal_data.quantity_grams / 100.0
+        meal_type = (meal_data.meal_type or "meal").strip().lower()
         
         total_calories = meal_data.calories_per_100g * quantity_ratio
         total_carbs = meal_data.carbs_per_100g * quantity_ratio
@@ -215,9 +216,10 @@ class NutritionService:
         meal_event = Event(
             user_id=user_id,
             event_type="meal",
-            title=f"Meal: {meal_data.food_name}",
+            title=f"{meal_type.capitalize()}: {meal_data.food_name}",
             description=f"Consumed {meal_data.quantity_grams}g",
             data={
+                "meal_type": meal_type,
                 "food_name": meal_data.food_name,
                 "quantity_grams": meal_data.quantity_grams,
                 "calories_per_100g": meal_data.calories_per_100g,
@@ -245,6 +247,7 @@ class NutritionService:
         db.refresh(meal_event)
         
         return MealLogResponse(
+            meal_type=meal_type,
             id=meal_event.id,
             user_id=user_id,
             food_name=meal_data.food_name,

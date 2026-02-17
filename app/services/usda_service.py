@@ -26,6 +26,9 @@ class USDAFoodResult:
     fdc_id: str
     description: str
     calories_per_100g: float
+    carbs_per_100g: float
+    protein_per_100g: float
+    fat_per_100g: float
     serving_size_grams: float | None = None
 
 
@@ -61,6 +64,46 @@ def _extract_calories_per_100g(food: dict[str, Any]) -> float | None:
             except (TypeError, ValueError):
                 return None
     return None
+
+
+def _extract_macros_per_100g(food: dict[str, Any]) -> tuple[float, float, float]:
+    """Extract carbs, protein, and fat values per 100g from USDA payload."""
+    nutrients: Any = food.get("foodNutrients", [])
+    if not isinstance(nutrients, list):
+        return (0.0, 0.0, 0.0)
+
+    carbs = 0.0
+    protein = 0.0
+    fat = 0.0
+
+    nutrients_list = cast(list[Any], nutrients)
+    for nutrient in nutrients_list:
+        if not isinstance(nutrient, dict):
+            continue
+
+        nutrient_dict = cast(dict[str, Any], nutrient)
+        nutrient_name = str(nutrient_dict.get("nutrientName", "")).lower()
+        nutrient_number = str(nutrient_dict.get("nutrientNumber", "")).strip()
+        unit_name = str(nutrient_dict.get("unitName", "")).upper()
+        value: Any = nutrient_dict.get("value")
+
+        if unit_name != "G":
+            continue
+
+        try:
+            nutrient_value = float(value)
+        except (TypeError, ValueError):
+            continue
+
+        # USDA nutrient numbers: 1005 carbs, 1003 protein, 1004 fat
+        if nutrient_number == "1005" or "carbohydrate" in nutrient_name:
+            carbs = nutrient_value
+        elif nutrient_number == "1003" or "protein" == nutrient_name or "protein" in nutrient_name:
+            protein = nutrient_value
+        elif nutrient_number == "1004" or "total lipid" in nutrient_name or "fat" == nutrient_name:
+            fat = nutrient_value
+
+    return (round(carbs, 2), round(protein, 2), round(fat, 2))
 
 
 def _extract_serving_size_grams(food: dict[str, Any]) -> float | None:
@@ -230,11 +273,15 @@ def _build_food_result_from_candidate(candidate: RankedUSDAResult) -> USDAFoodRe
         raise USDAServiceError("food_not_found")
 
     serving_size_grams = _extract_serving_size_grams(candidate.food)
+    carbs_per_100g, protein_per_100g, fat_per_100g = _extract_macros_per_100g(candidate.food)
 
     return USDAFoodResult(
         fdc_id=fdc_id,
         description=description,
         calories_per_100g=round(calories, 2),
+        carbs_per_100g=carbs_per_100g,
+        protein_per_100g=protein_per_100g,
+        fat_per_100g=fat_per_100g,
         serving_size_grams=serving_size_grams,
     )
 

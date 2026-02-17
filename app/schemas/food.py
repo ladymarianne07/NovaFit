@@ -19,12 +19,58 @@ class ParsedFoodPayload(BaseModel):
 
 
 class FoodParseCalculateResponse(BaseModel):
-    """Response with calculated calories."""
+    """Response with calculated calories and macronutrients."""
 
     food: str
     quantity_grams: float
     calories_per_100g: float
+    carbs_per_100g: float
+    protein_per_100g: float
+    fat_per_100g: float
     total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float
+
+
+class FoodItemDistributionResponse(BaseModel):
+    """Nutrition distribution for one parsed food item."""
+
+    food: str
+    quantity_grams: float
+    calories_per_100g: float
+    carbs_per_100g: float
+    protein_per_100g: float
+    fat_per_100g: float
+    total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float
+
+
+class ParsedMealResponse(BaseModel):
+    """One detected meal (breakfast/lunch/dinner/snack) with itemized nutrition."""
+
+    meal_type: str
+    meal_label: str
+    meal_timestamp: datetime
+    items: list[FoodItemDistributionResponse]
+    total_quantity_grams: float
+    total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float
+
+
+class FoodParseLogResponse(BaseModel):
+    """Meal-separated parsing and logging response with global totals."""
+
+    meals: list[ParsedMealResponse]
+    total_quantity_grams: float
+    total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float
 
 
 class FoodEntryResponse(BaseModel):

@@ -86,6 +86,7 @@ class FoodItemBase(BaseModel):
 
 class MealLogCreate(BaseModel):
     """Create meal log entry"""
+    meal_type: str = Field(default="meal", min_length=1, max_length=20)
     food_name: str = Field(..., min_length=1, max_length=200)
     quantity_grams: float = Field(gt=0, description="Quantity consumed in grams")
     

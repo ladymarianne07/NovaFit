@@ -1332,46 +1332,136 @@
 .nutrition-meal-item {
   width: 100%;
   text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0.9rem;
-  padding: 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border-radius: 1rem;
+  padding: 0.9rem;
   color: inherit;
-  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.nutrition-meal-main {
+.nutrition-meal-item:hover {
+  border-color: rgba(236, 72, 153, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(30, 41, 59, 0.2);
+}
+
+.nutrition-meal-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.nutrition-meal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .nutrition-meal-name {
   margin: 0;
   color: #ffffff;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .nutrition-meal-time {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
 }
 
-.nutrition-meal-macros {
-  margin-top: 0.45rem;
-  display: flex;
-  flex-wrap: wrap;
+.nutrition-meal-type-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nutrition-meal-type-badge.breakfast {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+.nutrition-meal-type-badge.lunch {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.nutrition-meal-type-badge.dinner {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+.nutrition-meal-type-badge.snack {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.nutrition-meal-items-line {
+  margin: 0.55rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.35;
+}
+
+.nutrition-meal-items-line strong {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.nutrition-meal-macro-grid {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.76rem;
 }
 
-.nutrition-meal-macros span {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 9999px;
-  padding: 0.18rem 0.55rem;
+.nutrition-macro-pill {
+  border-radius: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.nutrition-macro-pill.calories {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.22), rgba(249, 115, 22, 0.2));
+}
+
+.nutrition-macro-pill.carbs {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(99, 102, 241, 0.2));
+}
+
+.nutrition-macro-pill.protein {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(5, 150, 105, 0.2));
+}
+
+.nutrition-macro-pill.fat {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(234, 88, 12, 0.2));
+}
+
+.nutrition-macro-label {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.82);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.nutrition-macro-value {
+  font-size: 0.85rem;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .nutrition-saved-item {
@@ -1563,6 +1653,10 @@
   .nutrition-card-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .nutrition-meal-macro-grid {
+    grid-template-columns: 1fr;
   }
 
   .nutrition-tabs {

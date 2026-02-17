@@ -30,6 +30,8 @@ SYSTEM_PROMPT = (
     '{ "error": "invalid_domain" }\n'
     "If quantity is missing or unclear, return:\n"
     '{ "name": "english food name", "quantity": 1, "unit": "serving" }\n'
+    "If input contains multiple foods, return:\n"
+    '{ "items": [{"name": "english food name", "quantity": number, "unit": "grams" or "serving"}] }\n'
     "If the user gives a general food input with no explicit amount, infer one standard serving.\n"
     "Output must be valid JSON only.\n"
     "Format:\n"
@@ -74,7 +76,37 @@ def _extract_text_from_gemini_response(data: dict[str, Any]) -> str:
     return text.strip()
 
 
-def parse_food_with_gemini(text: str) -> dict[str, Any]:
+def _extract_json_candidate(raw_text: str) -> str:
+    """Extract probable JSON segment from model text, tolerating wrappers/fences."""
+    cleaned = raw_text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = cleaned.strip()
+
+    if (cleaned.startswith("{") and cleaned.endswith("}")) or (
+        cleaned.startswith("[") and cleaned.endswith("]")
+    ):
+        return cleaned
+
+    first_obj = cleaned.find("{")
+    first_arr = cleaned.find("[")
+    starts = [idx for idx in (first_obj, first_arr) if idx != -1]
+    if not starts:
+        return cleaned
+
+    start = min(starts)
+    end_obj = cleaned.rfind("}")
+    end_arr = cleaned.rfind("]")
+    end = max(end_obj, end_arr)
+    if end == -1 or end <= start:
+        return cleaned
+
+    return cleaned[start : end + 1]
+
+
+def parse_food_with_gemini(text: str) -> Any:
     """
     Parse Spanish food input into strict JSON using Gemini REST API.
 
@@ -102,7 +134,7 @@ def parse_food_with_gemini(text: str) -> dict[str, Any]:
             "temperature": 0.1,
             "topK": 1,
             "topP": 0.1,
-            "maxOutputTokens": 256,
+            "maxOutputTokens": 512,
             "responseMimeType": "application/json",
         },
     }
@@ -117,6 +149,13 @@ def parse_food_with_gemini(text: str) -> dict[str, Any]:
         )
         response.raise_for_status()
         client.close()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)
+        logger.error("Gemini HTTP status error: %s (URL: %s)", exc, sanitized_url)
+        if status_code == 429:
+            raise AIParserError("gemini_quota_exceeded") from exc
+        raise AIParserError("gemini_request_failed") from exc
     except httpx.HTTPError as exc:
         sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)
         logger.error("Gemini request failed: %s (URL: %s)", exc, sanitized_url)
@@ -133,13 +172,15 @@ def parse_food_with_gemini(text: str) -> dict[str, Any]:
 
     raw_text = _extract_text_from_gemini_response(data)
 
+    json_candidate = _extract_json_candidate(raw_text)
+
     try:
-        parsed_json: Any = json.loads(raw_text)
+        parsed_json: Any = json.loads(json_candidate)
     except json.JSONDecodeError as exc:
         logger.warning("Gemini returned invalid JSON: %s", raw_text)
         raise AIParserError("invalid_json_response") from exc
 
-    if not isinstance(parsed_json, dict):
+    if not isinstance(parsed_json, (dict, list)):
         raise AIParserError("invalid_json_response")
 
     return parsed_json

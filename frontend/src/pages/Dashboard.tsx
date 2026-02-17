@@ -16,6 +16,38 @@ const Dashboard: React.FC = () => {
   const [suggestion, setSuggestion] = useState<SuggestionData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  const loadNutritionData = async () => {
+    try {
+      setLoading(true)
+
+      const [macros, suggestionData] = await Promise.all([
+        nutritionAPI.getMacronutrients(),
+        nutritionAPI.getSuggestions()
+      ])
+
+      setMacroData(macros)
+      setSuggestion(suggestionData)
+    } catch (error) {
+      console.error('Failed to load nutrition data:', error)
+      setMacroData({
+        carbs: 0,
+        protein: 0,
+        fat: 0,
+        carbs_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.5 / 4 : 250,
+        protein_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.25 / 4 : 125,
+        fat_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.25 / 9 : 56,
+        carbs_percentage: 0,
+        protein_percentage: 0,
+        fat_percentage: 0,
+        total_calories: 0,
+        calories_target: user?.daily_caloric_expenditure || 2000,
+        calories_percentage: 0
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
   }
@@ -27,43 +59,20 @@ const Dashboard: React.FC = () => {
 
   // Load nutrition data on component mount
   useEffect(() => {
-    const loadNutritionData = async () => {
-      try {
-        setLoading(true)
-        
-        // Load macronutrients and suggestions in parallel
-        const [macros, suggestionData] = await Promise.all([
-          nutritionAPI.getMacronutrients(),
-          nutritionAPI.getSuggestions()
-        ])
-        
-        setMacroData(macros)
-        setSuggestion(suggestionData)
-      } catch (error) {
-        console.error('Failed to load nutrition data:', error)
-        // Set default values on error
-        setMacroData({
-          carbs: 0,
-          protein: 0,
-          fat: 0,
-          carbs_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.5 / 4 : 250,
-          protein_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.25 / 4 : 125,
-          fat_target: user?.daily_caloric_expenditure ? user.daily_caloric_expenditure * 0.25 / 9 : 56,
-          carbs_percentage: 0,
-          protein_percentage: 0,
-          fat_percentage: 0,
-          total_calories: 0,
-          calories_target: user?.daily_caloric_expenditure || 2000,
-          calories_percentage: 0
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
     if (user) {
       loadNutritionData()
     }
+  }, [user])
+
+  useEffect(() => {
+    const handler = () => {
+      if (user) {
+        loadNutritionData()
+      }
+    }
+
+    window.addEventListener('nutrition:updated', handler)
+    return () => window.removeEventListener('nutrition:updated', handler)
   }, [user])
 
   // Calculate current calories (using a mock value for now, could be from daily intake)
