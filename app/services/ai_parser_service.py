@@ -10,6 +10,8 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
+_GEMINI_HTTP_CLIENT = httpx.Client(timeout=20.0)
+
 # Configure httpx logging to suppress sensitive information
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -143,15 +145,12 @@ def parse_food_with_gemini(text: str) -> Any:
     }
 
     try:
-        # Use synchronous httpx for blocking I/O
-        client = httpx.Client(timeout=20.0)
-        response = client.post(
+        response = _GEMINI_HTTP_CLIENT.post(
             endpoint,
             params={"key": settings.GEMINI_API_KEY},
             json=payload,
         )
         response.raise_for_status()
-        client.close()
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response is not None else None
         sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)

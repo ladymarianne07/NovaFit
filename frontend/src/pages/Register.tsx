@@ -257,6 +257,12 @@ const Register: React.FC = () => {
     { value: '1.80', label: 'Muy activo', desc: 'Ejercicio muy intenso o trabajo físico' }
   ]
 
+  const stepBadges = [
+    'Detalles de la cuenta',
+    'Perfil biométrico',
+    'Objetivo fitness'
+  ]
+
   return (
     <div className="login-container">
       {/* Logo */}
@@ -265,7 +271,7 @@ const Register: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="login-content">
+      <div className="login-content register-content">
         {/* Header */}
         <div className="login-header">
           <h1 className="login-title">
@@ -280,23 +286,20 @@ const Register: React.FC = () => {
         </div>
 
         {/* Progress Indicator */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-white">
-              Paso {step} de 3
-            </span>
-            <span className="text-sm text-gray-300">
-              {step === 1 
-                ? '- Detalles de la cuenta' 
-                : step === 2
-                ? '- Perfil biométrico'
-                : '- Objetivo Fitness (Opcional)'
-              }
-            </span>
+        <div className="register-progress" aria-label="Progreso del registro">
+          <div className="register-progress-steps" aria-label="Etapa actual del registro">
+            <div
+              className="register-progress-step register-progress-step-single is-active"
+              aria-current="step"
+            >
+              <span className="register-progress-step-number">{step}</span>
+              <span className="register-progress-step-label">{stepBadges[step - 1]}</span>
+            </div>
           </div>
-          <div className="w-full bg-gray-700 bg-opacity-30 rounded-full h-2">
-            <div 
-              className="bg-white bg-opacity-40 h-2 rounded-full transition-all duration-300"
+
+          <div className="register-progress-bar bg-gray-700 bg-opacity-30" aria-hidden="true">
+            <div
+              className="register-progress-bar-fill bg-white bg-opacity-40"
               style={{ width: `${(step / 3) * 100}%` }}
             ></div>
           </div>
@@ -306,7 +309,7 @@ const Register: React.FC = () => {
         <form onSubmit={step === 1 ? handleStep1Submit : step === 2 ? handleStep2Submit : handleStep3Submit} className="login-form">
           <div key={step} className={`register-step-panel ${stepDirection === 'backward' ? 'register-step-backward' : 'register-step-forward'}`}>
           {step === 1 ? (
-            <div className="space-y-6">
+            <div className="register-step-content">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   id="firstName"
@@ -392,12 +395,12 @@ const Register: React.FC = () => {
                 required
               />
 
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full register-step-primary-action">
                 Continuar a Configuración de Perfil
               </Button>
             </div>
           ) : step === 2 ? (
-            <div className="space-y-6">
+            <div className="register-step-content">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   id="age"
@@ -501,14 +504,14 @@ const Register: React.FC = () => {
                 }))}
               />
 
-              <div className="flex gap-3">
+              <div className="register-step-actions-vertical">
                 <Button
                   type="button"
-                  variant="primary"
+                  variant="ghost"
                   onClick={() => goToStep(1)}
                   disabled={isLoading}
                   icon={<ArrowLeft className="w-4 h-4" />}
-                  className="flex-1 login-button-back"
+                  className="register-back-ghost"
                 >
                   Atrás
                 </Button>
@@ -517,14 +520,14 @@ const Register: React.FC = () => {
                   disabled={isLoading}
                   isLoading={isLoading}
                   icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
-                  className="flex-1"
+                  className="w-full register-step-primary-action"
                 >
                   {isLoading ? 'Creando...' : 'Configurar Objetivo'}
                 </Button>
               </div>
             </div>
           ) : step === 3 ? (
-            <div className="space-y-6">
+            <div className="register-step-content">
               <ObjectiveForm
                 selectedObjective={objective}
                 selectedAggressiveness={aggressiveness}
@@ -534,14 +537,14 @@ const Register: React.FC = () => {
                 }}
               />
 
-              <div className="flex gap-3">
+              <div className="register-step-actions-vertical">
                 <Button
                   type="button"
-                  variant="primary"
+                  variant="ghost"
                   onClick={() => goToStep(2)}
                   disabled={isLoading}
                   icon={<ArrowLeft className="w-4 h-4" />}
-                  className="flex-1 login-button-back"
+                  className="register-back-ghost"
                 >
                   Atrás
                 </Button>
@@ -550,13 +553,13 @@ const Register: React.FC = () => {
                   disabled={isLoading}
                   isLoading={isLoading}
                   icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
-                  className="flex-1"
+                  className="w-full register-step-primary-action"
                 >
                   {isLoading ? 'Creando Cuenta...' : 'Completar Registro'}
                 </Button>
               </div>
 
-              <p className="text-center text-sm text-gray-300">
+              <p className="register-objective-note">
                 Puedes cambiar tu objetivo después en tu perfil
               </p>
             </div>

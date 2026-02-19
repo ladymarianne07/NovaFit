@@ -187,11 +187,6 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
         )}
       </div>
 
-      {!objective && (
-        <div className="loading-indicator">
-          Selecciona un objetivo para continuar.
-        </div>
-      )}
     </div>
   )
 }

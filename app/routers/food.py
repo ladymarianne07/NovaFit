@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..dependencies import get_current_user
 from ..db.database import get_database_session
@@ -21,7 +22,7 @@ async def parse_and_calculate_food(
 ):
     """Parse food text, resolve USDA calories, store entry, and return total calories."""
     try:
-        result = FoodService.parse_and_calculate(db=db, text=payload.text)
+        result = await run_in_threadpool(FoodService.parse_and_calculate, db, payload.text)
         return result
     except FoodServiceError as exc:
         error_code = str(exc)
@@ -99,7 +100,7 @@ async def parse_and_log_food(
     """Parse free-text meals, split by meal types, log nutrition, and return itemized totals."""
     try:
         user_id: int = current_user.id  # type: ignore
-        result = FoodService.parse_and_log_meals(db=db, user_id=user_id, text=payload.text)
+        result = await run_in_threadpool(FoodService.parse_and_log_meals, db, user_id, payload.text)
         return result
     except FoodServiceError as exc:
         error_code = str(exc)

@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from uuid import uuid4
+from time import perf_counter
+import logging
 
 from ..models.food import FoodEntry
 from ..schemas.food import (
@@ -13,7 +15,6 @@ from ..schemas.nutrition import MealLogCreate
 from .food_parser import (
     FoodParserError,
     convert_to_grams,
-    estimate_serving_grams,
     is_serving_unit,
     meal_label_for_type,
     parse_food_input,
@@ -26,6 +27,9 @@ from .usda_service import USDAServiceError, search_food_by_name
 
 class FoodServiceError(Exception):
     """Base exception for food service workflow errors."""
+
+
+logger = logging.getLogger(__name__)
 
 
 class FoodService:
@@ -57,6 +61,40 @@ class FoodService:
         "unit",
         "ml",
     }
+    FAST_LOCAL_CONVERSION_UNITS = {
+        "g",
+        "gram",
+        "grams",
+        "gramo",
+        "gramos",
+        "kg",
+        "kilogram",
+        "kilograms",
+        "kilogramo",
+        "kilogramos",
+        "oz",
+        "onza",
+        "onzas",
+        "lb",
+        "lbs",
+        "libra",
+        "libras",
+        "cup",
+        "cups",
+        "taza",
+        "tazas",
+        "tablespoon",
+        "tablespoons",
+        "tbsp",
+        "cucharada",
+        "cucharadas",
+        "teaspoon",
+        "teaspoons",
+        "tsp",
+        "cucharadita",
+        "cucharaditas",
+        "ml",
+    }
 
     @classmethod
     def _resolve_item_nutrition(
@@ -65,6 +103,8 @@ class FoodService:
         normalized_name: str,
         quantity: float,
         unit: str,
+        nutrition_cache_by_name: dict[str, tuple[str, float, float, float, float, float]],
+        portion_cache_by_food_and_unit: dict[tuple[str, str], float],
     ) -> tuple[str, float, float, float, float, float, float, float, float, float]:
         """
         Resolve USDA nutrition for one parsed item and calculate totals.
@@ -87,41 +127,73 @@ class FoodService:
             .first()
         )
 
-        usda_match = None
-        try:
-            # Prefer fresh USDA values to avoid stale cached mismatches.
-            usda_match = search_food_by_name(normalized_name)
-            usda_fdc_id = usda_match.fdc_id
-            calories_per_100g = usda_match.calories_per_100g
-            carbs_per_100g = usda_match.carbs_per_100g
-            protein_per_100g = usda_match.protein_per_100g
-            fat_per_100g = usda_match.fat_per_100g
-        except USDAServiceError as exc:
-            # Fallback to latest cached calories if available.
-            if cached_entry is None:
+        serving_size_grams: float | None = None
+        cached_nutrition = nutrition_cache_by_name.get(normalized_name)
+        if cached_nutrition is not None:
+            (
+                usda_fdc_id,
+                calories_per_100g,
+                carbs_per_100g,
+                protein_per_100g,
+                fat_per_100g,
+                cached_serving_grams,
+            ) = cached_nutrition
+            serving_size_grams = cached_serving_grams if cached_serving_grams > 0 else None
+        else:
+            try:
+                usda_match = search_food_by_name(normalized_name)
+                usda_fdc_id = usda_match.fdc_id
+                calories_per_100g = usda_match.calories_per_100g
+                carbs_per_100g = usda_match.carbs_per_100g
+                protein_per_100g = usda_match.protein_per_100g
+                fat_per_100g = usda_match.fat_per_100g
+                serving_size_grams = usda_match.serving_size_grams
+                nutrition_cache_by_name[normalized_name] = (
+                    usda_fdc_id,
+                    calories_per_100g,
+                    carbs_per_100g,
+                    protein_per_100g,
+                    fat_per_100g,
+                    serving_size_grams or 0.0,
+                )
+            except USDAServiceError as exc:
+                # Fallback to latest cached calories if available.
+                if cached_entry is None:
+                    raise FoodServiceError(str(exc)) from exc
+
+                usda_fdc_id = cached_entry.usda_fdc_id
+                calories_per_100g = float(cached_entry.calories_per_100g)
+                carbs_per_100g = 0.0
+                protein_per_100g = 0.0
+                fat_per_100g = 0.0
+
+        if parsed_unit in cls.FAST_LOCAL_CONVERSION_UNITS:
+            try:
+                quantity_grams = convert_to_grams(quantity, parsed_unit, normalized_name)
+            except FoodParserError as exc:
                 raise FoodServiceError(str(exc)) from exc
-
-            usda_fdc_id = cached_entry.usda_fdc_id
-            calories_per_100g = float(cached_entry.calories_per_100g)
-            carbs_per_100g = 0.0
-            protein_per_100g = 0.0
-            fat_per_100g = 0.0
-
-        if requires_serving_resolution:
-            serving_size_grams = usda_match.serving_size_grams if usda_match else None
-            portion_grams = PortionResolverService.resolve_portion_grams(
-                db=db,
-                food_name=normalized_name,
-                unit=parsed_unit,
-                preferred_serving_grams=serving_size_grams,
-            )
+        elif requires_serving_resolution:
+            cache_key = (normalized_name, parsed_unit)
+            portion_grams = portion_cache_by_food_and_unit.get(cache_key)
+            if portion_grams is None:
+                portion_grams = PortionResolverService.resolve_portion_grams(
+                    db=db,
+                    food_name=normalized_name,
+                    unit=parsed_unit,
+                    preferred_serving_grams=serving_size_grams,
+                )
+                portion_cache_by_food_and_unit[cache_key] = portion_grams
             quantity_grams = round(quantity * portion_grams, 2)
         elif parsed_unit in cls.PORTION_UNITS:
-            portion_grams = PortionResolverService.resolve_portion_grams(
-                db=db,
-                food_name=normalized_name,
-                unit=parsed_unit,
-            )
+            cache_key = (normalized_name, parsed_unit)
+            portion_grams = portion_cache_by_food_and_unit.get(cache_key)
+            if portion_grams is None:
+                portion_grams = PortionResolverService.resolve_portion_grams(
+                    db=db,
+                    food_name=normalized_name,
+                    unit=parsed_unit,
+                )
+                portion_cache_by_food_and_unit[cache_key] = portion_grams
             quantity_grams = round(quantity * portion_grams, 2)
         else:
             try:
@@ -156,6 +228,7 @@ class FoodService:
         Parse free-form meal text, split by meal type markers, compute item nutrition,
         log each item to daily nutrition totals, and return meal-separated distribution.
         """
+        overall_start = perf_counter()
         sections = split_text_by_meal_type(text)
         if not sections:
             raise FoodServiceError("insufficient_data")
@@ -167,12 +240,21 @@ class FoodService:
         day_total_protein = 0.0
         day_total_fat = 0.0
         generic_meal_counter = 0
+        nutrition_cache_by_name: dict[str, tuple[str, float, float, float, float, float]] = {}
+        portion_cache_by_food_and_unit: dict[tuple[str, str], float] = {}
 
         for meal_type, segment_text in sections:
+            meal_parse_start = perf_counter()
             try:
                 parsed_items = parse_food_input(segment_text)
             except FoodParserError as exc:
                 raise FoodServiceError(str(exc)) from exc
+            logger.info(
+                "parse_and_log stage=parse_food_input meal_type=%s items=%s duration_ms=%.2f",
+                meal_type,
+                len(parsed_items),
+                (perf_counter() - meal_parse_start) * 1000,
+            )
 
             meal_items: list[FoodItemDistributionResponse] = []
             meal_total_quantity_grams = 0.0
@@ -190,6 +272,7 @@ class FoodService:
             meal_group_id = uuid4().hex
 
             for parsed in parsed_items:
+                resolve_start = perf_counter()
                 normalized_name = parsed.name.strip().lower()
                 if not normalized_name:
                     continue
@@ -210,6 +293,13 @@ class FoodService:
                     normalized_name=normalized_name,
                     quantity=parsed.quantity,
                     unit=parsed.unit,
+                    nutrition_cache_by_name=nutrition_cache_by_name,
+                    portion_cache_by_food_and_unit=portion_cache_by_food_and_unit,
+                )
+                logger.info(
+                    "parse_and_log stage=resolve_item food=%s duration_ms=%.2f",
+                    normalized_name,
+                    (perf_counter() - resolve_start) * 1000,
                 )
 
                 db.add(
@@ -237,6 +327,7 @@ class FoodService:
                         protein_per_100g=protein_per_100g,
                         fat_per_100g=fat_per_100g,
                     ),
+                    auto_commit=False,
                 )
 
                 if meal_timestamp is None:
@@ -293,6 +384,11 @@ class FoodService:
             raise FoodServiceError("insufficient_data")
 
         db.commit()
+        logger.info(
+            "parse_and_log stage=total meals=%s duration_ms=%.2f",
+            len(meals_response),
+            (perf_counter() - overall_start) * 1000,
+        )
 
         return FoodParseLogResponse(
             meals=meals_response,
@@ -317,6 +413,8 @@ class FoodService:
         aggregate_total_fat = 0.0
         normalized_names: list[str] = []
         usda_ids: list[str] = []
+        nutrition_cache_by_name: dict[str, tuple[str, float, float, float, float, float]] = {}
+        portion_cache_by_food_and_unit: dict[tuple[str, str], float] = {}
 
         for parsed in parsed_items:
             normalized_name = parsed.name.strip().lower()
@@ -339,6 +437,8 @@ class FoodService:
                 normalized_name=normalized_name,
                 quantity=parsed.quantity,
                 unit=parsed.unit,
+                nutrition_cache_by_name=nutrition_cache_by_name,
+                portion_cache_by_food_and_unit=portion_cache_by_food_and_unit,
             )
 
             normalized_names.append(normalized_name)

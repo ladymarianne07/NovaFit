@@ -48,13 +48,13 @@ describe('Input Component', () => {
 
   test('handles password type with toggle', () => {
     render(<Input label="Password" type="password" showPasswordToggle />)
-    
-    const input = screen.getByLabelText(/contraseña/i)
+
+    const input = screen.getByLabelText(/password/i, { selector: 'input' })
     expect(input).toHaveAttribute('type', 'password')
-    
-    const toggleButton = screen.getByRole('button')
+
+    const toggleButton = screen.getByRole('button', { name: /mostrar contraseña|ocultar contraseña/i })
     fireEvent.click(toggleButton)
-    
+
     expect(input).toHaveAttribute('type', 'text')
   })
 })

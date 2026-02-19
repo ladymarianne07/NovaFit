@@ -23,7 +23,7 @@ describe('BottomNavigation', () => {
     expect(screen.getByText('Comidas')).toBeInTheDocument()
     expect(screen.getByText('Entrenamiento')).toBeInTheDocument()
     expect(screen.getByText('Progreso')).toBeInTheDocument()
-    expect(screen.getByText('Logout')).toBeInTheDocument()
+    expect(screen.getByText('Salir')).toBeInTheDocument()
   })
 
   it('shows active tab with correct styling', () => {
@@ -63,7 +63,7 @@ describe('BottomNavigation', () => {
       />
     )
 
-    const logoutButton = screen.getByRole('button', { name: /logout/i })
+    const logoutButton = screen.getByRole('button', { name: /salir/i })
     fireEvent.click(logoutButton)
 
     expect(mockOnLogout).toHaveBeenCalled()
@@ -106,7 +106,7 @@ describe('BottomNavigation', () => {
     expect(screen.getByRole('button', { name: /comidas/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /entrenamiento/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /progreso/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /salir/i })).toBeInTheDocument()
   })
 
   it('applies correct CSS classes', () => {

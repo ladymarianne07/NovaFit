@@ -13,8 +13,8 @@ describe('FormField Component', () => {
         icon={<Mail data-testid="mail-icon" />}
       />
     )
-    
-    expect(screen.getByLabelText(/correo electrónico/i)).toBeInTheDocument()
+
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/enter your email/i)).toBeInTheDocument()
     expect(screen.getByTestId('mail-icon')).toBeInTheDocument()
   })

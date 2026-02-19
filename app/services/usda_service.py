@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 from typing import Any, cast
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from rapidfuzz import fuzz
@@ -57,6 +58,10 @@ MILK_PLAIN_TOKENS = {"milk", "leche"}
 
 
 logger = logging.getLogger(__name__)
+
+USDA_CACHE_TTL_SECONDS = 60 * 60 * 6
+_USDA_RESULT_CACHE: dict[str, tuple[datetime, "USDAFoodResult"]] = {}
+_USDA_HTTP_CLIENT = httpx.Client(timeout=15.0)
 
 
 class USDAServiceError(Exception):
@@ -403,11 +408,10 @@ def _search_usda_top_results(normalized_name: str) -> list[dict[str, Any]]:
         }
 
         try:
-            response = httpx.post(
+            response = _USDA_HTTP_CLIENT.post(
                 USDA_SEARCH_URL,
                 params={"api_key": settings.USDA_API_KEY},
                 json=payload,
-                timeout=15.0,
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
@@ -482,7 +486,17 @@ def _build_food_result_from_candidate(candidate: RankedUSDAResult) -> USDAFoodRe
 
 def search_food_by_name(normalized_name: str) -> USDAFoodResult:
     """Search USDA FoodData Central and return best ranked result."""
+    normalized_key = normalized_name.strip().lower()
+    cached_value = _USDA_RESULT_CACHE.get(normalized_key)
+    now = datetime.now(timezone.utc)
+    if cached_value is not None:
+        cached_at, cached_result = cached_value
+        if now - cached_at < timedelta(seconds=USDA_CACHE_TTL_SECONDS):
+            return cached_result
+
     foods = _search_usda_top_results(normalized_name)
     ranked_results = rank_usda_results(normalized_name, foods)
     best_candidate = _select_best_candidate(normalized_name, ranked_results)
-    return _build_food_result_from_candidate(best_candidate)
+    result = _build_food_result_from_candidate(best_candidate)
+    _USDA_RESULT_CACHE[normalized_key] = (now, result)
+    return result

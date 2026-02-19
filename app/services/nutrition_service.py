@@ -218,7 +218,8 @@ class NutritionService:
         cls, 
         db: Session, 
         user_id: int, 
-        meal_data: MealLogCreate
+        meal_data: MealLogCreate,
+        auto_commit: bool = True,
     ) -> MealLogResponse:
         """
         Log a meal and update daily nutrition
@@ -277,8 +278,11 @@ class NutritionService:
         nutrition.fat_consumed += total_fat
         nutrition.total_calories += total_calories
         
-        db.commit()
-        db.refresh(meal_event)
+        if auto_commit:
+            db.commit()
+            db.refresh(meal_event)
+        else:
+            db.flush()
         
         return MealLogResponse(
             meal_type=meal_type,

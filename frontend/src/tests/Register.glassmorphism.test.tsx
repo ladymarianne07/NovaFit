@@ -23,7 +23,7 @@ jest.mock('../contexts/AuthContext', () => ({
 
 // Test wrapper component
 const RegisterWrapper: React.FC = () => (
-  <BrowserRouter>
+  <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <AuthProvider>
       <Register />
     </AuthProvider>
@@ -77,21 +77,18 @@ describe('Register Page - Glassmorphism Design System Verification', () => {
     render(<RegisterWrapper />)
 
     // ✅ Verify title uses glassmorphism classes
-    expect(screen.getByText(/join/i)).toBeInTheDocument()
-    
     const titleBrand = screen.getByText(/novafitness/i)
     expect(titleBrand).toHaveClass('login-title-brand')
 
     // ✅ Verify subtitle uses glassmorphism classes
-    const subtitle = document.querySelector('.login-subtitle')
-    expect(subtitle).toBeInTheDocument()
+    expect(screen.getByText(/crea tu cuenta para comenzar/i)).toBeInTheDocument()
   })
 
   test('progress indicator uses glassmorphism styling', () => {
     render(<RegisterWrapper />)
 
-    // ✅ Verify progress text has white styling for glassmorphism
-    expect(screen.getByText(/step 1 of 2/i)).toBeInTheDocument()
+    // ✅ Verify simplified current-step chip is visible
+    expect(screen.getByText(/detalles de la cuenta/i)).toBeInTheDocument()
     
     // ✅ Verify progress bar container uses glassmorphism styles
     const progressContainer = document.querySelector('.bg-gray-700.bg-opacity-30')
@@ -105,15 +102,15 @@ describe('Register Page - Glassmorphism Design System Verification', () => {
     render(<RegisterWrapper />)
 
     // ✅ Verify essential form elements are present
-    expect(screen.getByText(/first name/i)).toBeInTheDocument()
-    expect(screen.getByText(/last name/i)).toBeInTheDocument()
-    expect(screen.getByText(/email address/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/password/i).length).toBeGreaterThan(0) // Password appears multiple times (label + confirm)
+    expect(screen.getByText(/^nombre$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^apellido$/i)).toBeInTheDocument()
+    expect(screen.getByText(/correo electrónico/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/contraseña/i).length).toBeGreaterThan(0)
 
     // ✅ Verify continue button is present
-    expect(screen.getByRole('button', { name: /continue to profile setup/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /continuar a configuración de perfil/i })).toBeInTheDocument()
 
     // ✅ Verify login link is present
-    expect(screen.getByRole('link', { name: /sign in here/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /inicia sesión aquí/i })).toBeInTheDocument()
   })
 })

@@ -11,8 +11,8 @@ describe('CalorieTracker', () => {
 
   it('renders user name in welcome message', () => {
     render(<CalorieTracker {...defaultProps} />)
-    
-    expect(screen.getByText('Welcome back, John Doe!')).toBeInTheDocument()
+
+    expect(screen.getByRole('heading', { name: /¡bienvenido de vuelta, john doe!/i })).toBeInTheDocument()
   })
 
   it('displays current calorie value correctly', () => {
@@ -27,8 +27,8 @@ describe('CalorieTracker', () => {
 
   it('displays target calorie value correctly', () => {
     render(<CalorieTracker {...defaultProps} />)
-    
-    expect(screen.getByText(/of 2,000 cal/)).toBeInTheDocument()
+
+    expect(screen.getByText(/de\s*2,000\s*cal/i)).toBeInTheDocument()
   })
 
   it('shows correct percentage calculation', () => {
@@ -40,8 +40,8 @@ describe('CalorieTracker', () => {
 
   it('displays Total Caloric Expenditure title', () => {
     render(<CalorieTracker {...defaultProps} />)
-    
-    expect(screen.getByText('Total Caloric Expenditure')).toBeInTheDocument()
+
+    expect(screen.getByText('Gasto Calórico Total')).toBeInTheDocument()
   })
 
   it('handles large numbers with proper formatting', () => {
@@ -52,9 +52,9 @@ describe('CalorieTracker', () => {
         targetCalories={15000}
       />
     )
-    
+
     expect(screen.getByText(/12,345/)).toBeInTheDocument()
-    expect(screen.getByText(/of 15,000 cal/)).toBeInTheDocument()
+    expect(screen.getByText(/de\s*15,000\s*cal/i)).toBeInTheDocument()
   })
 
   it('handles 100% progress correctly', () => {
