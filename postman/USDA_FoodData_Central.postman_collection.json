@@ -1,0 +1,225 @@
+{
+  "info": {
+    "name": "USDA FoodData Central API",
+    "_postman_id": "5d267e89-c95a-4b6e-9191-c43fda67f7f8",
+    "description": "Colección lista para probar USDA FoodData Central. Solo cambia variables/body y presiona Send.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('USDA_API_KEY')) {",
+          "  console.warn('⚠️ USDA_API_KEY no está configurada en el environment.');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "USDA_BASE_URL", "value": "https://api.nal.usda.gov/fdc/v1" },
+    { "key": "query", "value": "fish" },
+    { "key": "pageSize", "value": "5" },
+    { "key": "pageNumber", "value": "1" },
+    { "key": "sortBy", "value": "dataType.keyword" },
+    { "key": "sortOrder", "value": "asc" },
+    { "key": "fdcId", "value": "" },
+    { "key": "fdcIdsCsv", "value": "" },
+    { "key": "brandOwner", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Search Foods (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{USDA_BASE_URL}}/foods/search?api_key={{USDA_API_KEY}}",
+          "host": ["{{USDA_BASE_URL}}"],
+          "path": ["foods", "search"],
+          "query": [
+            { "key": "api_key", "value": "{{USDA_API_KEY}}" }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"{{query}}\",\n  \"pageSize\": {{pageSize}},\n  \"pageNumber\": {{pageNumber}},\n  \"sortBy\": \"{{sortBy}}\",\n  \"sortOrder\": \"{{sortOrder}}\",\n  \"brandOwner\": \"{{brandOwner}}\",\n  \"dataType\": [\"Foundation\", \"SR Legacy\", \"Survey (FNDDS)\"]\n}"
+        },
+        "description": "Búsqueda principal de alimentos. Editá query/pageSize/dataType y enviá."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "pm.test('Response has foods array', function () {",
+              "  pm.expect(json).to.have.property('foods');",
+              "  pm.expect(json.foods).to.be.an('array');",
+              "});",
+              "",
+              "if (json.foods && json.foods.length > 0 && json.foods[0].fdcId) {",
+              "  pm.environment.set('fdcId', String(json.foods[0].fdcId));",
+              "  console.log('✅ fdcId guardado:', json.foods[0].fdcId);",
+              "}",
+              "",
+              "console.log('Top resultados:', (json.foods || []).slice(0, 5).map(f => ({ fdcId: f.fdcId, description: f.description, dataType: f.dataType })));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Search Foods (GET quick test)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{USDA_BASE_URL}}/foods/search?query={{query}}&pageSize={{pageSize}}&pageNumber={{pageNumber}}&api_key={{USDA_API_KEY}}",
+          "host": ["{{USDA_BASE_URL}}"],
+          "path": ["foods", "search"],
+          "query": [
+            { "key": "query", "value": "{{query}}" },
+            { "key": "pageSize", "value": "{{pageSize}}" },
+            { "key": "pageNumber", "value": "{{pageNumber}}" },
+            { "key": "api_key", "value": "{{USDA_API_KEY}}" }
+          ]
+        },
+        "description": "Versión rápida por query params."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Get Food by FDC ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{USDA_BASE_URL}}/food/{{fdcId}}?api_key={{USDA_API_KEY}}",
+          "host": ["{{USDA_BASE_URL}}"],
+          "path": ["food", "{{fdcId}}"],
+          "query": [
+            { "key": "api_key", "value": "{{USDA_API_KEY}}" }
+          ]
+        },
+        "description": "Trae detalle nutricional de un alimento por fdcId. Se autocompleta con el primer resultado de la request 01."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response has description', function () {",
+              "  pm.expect(json).to.have.property('description');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Get Multiple Foods (POST /foods)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{USDA_BASE_URL}}/foods?api_key={{USDA_API_KEY}}",
+          "host": ["{{USDA_BASE_URL}}"],
+          "path": ["foods"],
+          "query": [
+            { "key": "api_key", "value": "{{USDA_API_KEY}}" }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fdcIds\": [170379, 169910],\n  \"format\": \"full\",\n  \"nutrients\": [1008, 1005, 1003, 1004]\n}"
+        },
+        "description": "Trae múltiples alimentos por lista de fdcIds."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response is an array', function () {",
+              "  pm.expect(json).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - List Foods (POST /foods/list)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{USDA_BASE_URL}}/foods/list?api_key={{USDA_API_KEY}}",
+          "host": ["{{USDA_BASE_URL}}"],
+          "path": ["foods", "list"],
+          "query": [
+            { "key": "api_key", "value": "{{USDA_API_KEY}}" }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pageSize\": {{pageSize}},\n  \"pageNumber\": {{pageNumber}},\n  \"sortBy\": \"{{sortBy}}\",\n  \"sortOrder\": \"{{sortOrder}}\",\n  \"dataType\": [\"Foundation\", \"SR Legacy\"]\n}"
+        },
+        "description": "Listado paginado de alimentos por tipo."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.test('Response is an array', function () {",
+              "  pm.expect(json).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

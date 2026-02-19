@@ -7,6 +7,8 @@ from ..db.database import get_database_session
 from ..db.models import User
 from ..schemas.food import FoodParseCalculateResponse, FoodParseLogResponse, FoodParseRequest
 from ..services.food_service import FoodService, FoodServiceError
+from ..services.food_aggregator_service import FoodAggregatorService
+from ..schemas.food_normalized import FoodNormalized
 
 
 router = APIRouter(prefix="/food", tags=["food"])
@@ -70,6 +72,22 @@ async def parse_and_calculate_food(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "food_processing_failed"},
         )
+
+
+@router.get("/search-multi")
+async def search_multi_source_food(
+    query: str,
+    db: Session = Depends(get_database_session),
+) -> list[FoodNormalized]:
+    """
+    Search for food across multiple sources (USDA, OpenFoodFacts, FatSecret).
+    
+    Returns ranked results (top 5) with confidence scores.
+    Prioritizes barcodes → OpenFoodFacts, generic foods → USDA.
+    """
+    aggregator = FoodAggregatorService()
+    results = await aggregator.search_food(query=query, db=db)
+    return results
 
 
 @router.post("/parse-and-log", response_model=FoodParseLogResponse)

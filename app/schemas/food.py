@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class FoodParseRequest(BaseModel):
     """Incoming request payload for parse-and-calculate endpoint."""
 
-    text: str = Field(..., min_length=3, max_length=500)
+    text: str = Field(..., min_length=3, max_length=3000)
 
 
 class ParsedFoodPayload(BaseModel):

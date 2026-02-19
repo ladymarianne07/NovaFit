@@ -26,6 +26,8 @@ SYSTEM_PROMPT = (
     "You only process food entries.\n"
     "You convert Spanish input into structured English JSON.\n"
     "You do not provide explanations.\n"
+    "Extract all foods mentioned, even when the text includes multiple meals (breakfast/lunch/dinner/snacks).\n"
+    "Ignore meal labels in the output and return only food items.\n"
     "If input is not food-related, return:\n"
     '{ "error": "invalid_domain" }\n'
     "If quantity is missing or unclear, return:\n"
@@ -134,7 +136,7 @@ def parse_food_with_gemini(text: str) -> Any:
             "temperature": 0.1,
             "topK": 1,
             "topP": 0.1,
-            "maxOutputTokens": 512,
+            "maxOutputTokens": 2048,
             "responseMimeType": "application/json",
         },
     }

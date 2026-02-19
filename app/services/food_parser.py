@@ -68,6 +68,18 @@ MEAL_SPLIT_PATTERN = re.compile(
 TEMPORAL_SPLIT_PATTERN = re.compile(r"\b(despues|después|luego)\b", re.IGNORECASE)
 POSTRE_PREFIX_PATTERN = re.compile(r"^(?:de\s+)?postre\b", re.IGNORECASE)
 
+ITEM_CONTAINER_KEYS: tuple[str, ...] = (
+    "items",
+    "foods",
+    "food_items",
+    "alimentos",
+)
+
+NESTED_CONTAINER_KEYS: tuple[str, ...] = (
+    "meals",
+    "comidas",
+)
+
 
 
 def convert_to_grams(quantity: float, unit: str) -> float:
@@ -168,6 +180,35 @@ def split_text_by_meal_type(text: str) -> list[tuple[str, str]]:
     return sections
 
 
+def _collect_food_item_candidates(node: Any) -> list[dict[str, Any]]:
+    """Recursively collect probable food item dictionaries from heterogeneous AI JSON."""
+    collected: list[dict[str, Any]] = []
+
+    if isinstance(node, list):
+        for child in node:
+            collected.extend(_collect_food_item_candidates(child))
+        return collected
+
+    if not isinstance(node, dict):
+        return collected
+
+    has_item_shape = all(field in node for field in ("name", "quantity", "unit"))
+    if has_item_shape:
+        collected.append(node)
+
+    for key in ITEM_CONTAINER_KEYS:
+        value = node.get(key)
+        if isinstance(value, list):
+            collected.extend(_collect_food_item_candidates(value))
+
+    for key in NESTED_CONTAINER_KEYS:
+        value = node.get(key)
+        if isinstance(value, list):
+            collected.extend(_collect_food_item_candidates(value))
+
+    return collected
+
+
 def parse_food_input(text: str) -> list[ParsedFoodPayload]:
     """
     Parse natural language food input to structured data using strict JSON contract.
@@ -189,18 +230,9 @@ def parse_food_input(text: str) -> list[ParsedFoodPayload]:
             raise FoodParserError("insufficient_data")
         raise FoodParserError("malformed_parser_response")
 
-    raw_items: list[Any]
-    if isinstance(data, list):
-        raw_items = data
-    elif isinstance(data, dict) and isinstance(data.get("items"), list):
-        raw_items = data.get("items", [])
-    elif isinstance(data, dict):
-        raw_items = [data]
-    else:
-        raise FoodParserError("malformed_parser_response")
-
+    raw_items = _collect_food_item_candidates(data)
     if not raw_items:
-        raise FoodParserError("insufficient_data")
+        raise FoodParserError("malformed_parser_response")
 
     parsed_items: list[ParsedFoodPayload] = []
     for item in raw_items:

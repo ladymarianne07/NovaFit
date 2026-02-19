@@ -132,3 +132,36 @@ def test_parse_and_calculate_aggregates_multiple_foods(client: TestClient, monke
     assert data["total_carbs"] == 56.0
     assert data["total_protein"] == 36.4
     assert data["total_fat"] == 4.2
+
+
+def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.usda_service import USDAFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [ParsedFoodPayload(name="oatmeal", quantity=100, unit="grams")]
+
+    def fake_search_food_by_name(_normalized_name: str):
+        return USDAFoodResult(
+            fdc_id="333",
+            description="Oatmeal",
+            calories_per_100g=68.0,
+            carbs_per_100g=12.0,
+            protein_per_100g=2.4,
+            fat_per_100g=1.4,
+            serving_size_grams=100.0,
+        )
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
+
+    long_text = " ".join(["avena con fruta y yogurt"] * 35)  # >500 chars
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": long_text},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+    assert data["food"] == "oatmeal"

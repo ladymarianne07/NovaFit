@@ -9,7 +9,9 @@ from ..config import settings
 
 
 USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
-MIN_SIMILARITY_THRESHOLD = 60.0
+# Keep a conservative floor but allow common generic queries (e.g., "fish")
+# that can score in the high 50s depending on USDA description phrasing.
+MIN_SIMILARITY_THRESHOLD = 55.0
 
 
 logger = logging.getLogger(__name__)

@@ -36,6 +36,9 @@ class Settings(BaseSettings):
 
     # External nutrition provider API keys
     USDA_API_KEY: Optional[str] = None
+    OPENFOODFACTS_USER_AGENT: str = "NovaFitness/1.0 (contact: support@novafitness.local)"
+    FATSECRET_CLIENT_ID: Optional[str] = None
+    FATSECRET_CLIENT_SECRET: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"
     
