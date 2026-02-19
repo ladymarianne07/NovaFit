@@ -13,6 +13,48 @@ USDA_SEARCH_URL = "https://api.nal.usda.gov/fdc/v1/foods/search"
 # that can score in the high 50s depending on USDA description phrasing.
 MIN_SIMILARITY_THRESHOLD = 55.0
 
+FRIED_QUERY_TOKENS = {"fried", "deep-fried", "breaded", "frito", "frita", "empanado", "empanada"}
+FRIED_DESC_TOKENS = {"fried", "deep-fried", "breaded", "battered", "fritters"}
+
+COOKED_QUERY_TOKENS = {"cooked", "boiled", "steamed", "baked", "grilled", "cocido", "hervido", "horneado"}
+COOKED_DESC_TOKENS = {"cooked", "boiled", "steamed", "baked", "grilled", "roasted"}
+
+RAW_QUERY_TOKENS = {"raw", "crudo", "uncooked"}
+RAW_DESC_TOKENS = {"raw", "uncooked"}
+
+GRAIN_DEFAULT_COOKED_TOKENS = {
+    "rice",
+    "arroz",
+    "pasta",
+    "noodle",
+    "quinoa",
+    "oat",
+    "oats",
+    "lentil",
+    "lentils",
+    "bean",
+    "beans",
+}
+
+ANIMAL_PROTEIN_TOKENS = {"chicken", "beef", "pork", "fish", "turkey", "salmon", "tuna"}
+MEATLESS_TOKENS = {"meatless", "vegetarian", "vegan", "plant-based", "plant based"}
+ADDED_FAT_TOKENS = {"margarine", "butter", "added fat", "with oil", "fried rice"}
+
+QUERY_STOPWORDS = {
+    "and",
+    "with",
+    "without",
+    "de",
+    "con",
+    "sin",
+    "the",
+    "a",
+    "an",
+}
+
+COFFEE_PLAIN_TOKENS = {"coffee", "cafe", "café"}
+MILK_PLAIN_TOKENS = {"milk", "leche"}
+
 
 logger = logging.getLogger(__name__)
 
@@ -162,13 +204,143 @@ def _category_priority_bonus(category: str) -> float:
 
 
 def _compute_similarity_score(normalized_name: str, description: str) -> float:
-    """Compute robust similarity score using token_sort_ratio (0-100)."""
-    return float(
-        fuzz.token_sort_ratio(
-            normalized_name.lower().strip(),
-            description.lower().strip(),
-        )
+    """Compute robust similarity score for short queries vs verbose USDA descriptions."""
+    query = normalized_name.lower().strip()
+    target = description.lower().strip()
+
+    token_sort = float(fuzz.token_sort_ratio(query, target))
+    partial_token_set = float(fuzz.partial_token_set_ratio(query, target))
+    return max(token_sort, partial_token_set)
+
+
+def _has_any_token(text: str, tokens: set[str]) -> bool:
+    lowered = text.lower()
+    return any(token in lowered for token in tokens)
+
+
+def _preparation_alignment_bonus(normalized_name: str, description: str) -> float:
+    """Score candidate alignment by preparation state (fried/cooked/raw)."""
+    query = normalized_name.lower().strip()
+    desc = description.lower().strip()
+
+    query_is_fried = _has_any_token(query, FRIED_QUERY_TOKENS)
+    query_is_cooked = _has_any_token(query, COOKED_QUERY_TOKENS)
+    query_is_raw = _has_any_token(query, RAW_QUERY_TOKENS)
+
+    desc_is_fried = _has_any_token(desc, FRIED_DESC_TOKENS)
+    desc_is_cooked = _has_any_token(desc, COOKED_DESC_TOKENS)
+    desc_is_raw = _has_any_token(desc, RAW_DESC_TOKENS)
+
+    # Explicit fried intent: avoid matching raw/cooked-only records.
+    if query_is_fried:
+        if desc_is_fried:
+            return 10.0
+        if desc_is_raw:
+            return -10.0
+        return -3.0
+
+    # Explicit cooked intent.
+    if query_is_cooked:
+        if desc_is_cooked:
+            return 8.0
+        if desc_is_raw:
+            return -8.0
+
+    # Explicit raw intent.
+    if query_is_raw:
+        if desc_is_raw:
+            return 8.0
+        if desc_is_cooked or desc_is_fried:
+            return -8.0
+
+    # Practical default: for grains/starches users usually mean cooked servings.
+    has_grain_token = _has_any_token(query, GRAIN_DEFAULT_COOKED_TOKENS)
+    has_explicit_state = query_is_fried or query_is_cooked or query_is_raw
+    if has_grain_token and not has_explicit_state:
+        if desc_is_cooked:
+            return 6.0
+        if desc_is_raw:
+            return -8.0
+
+    return 0.0
+
+
+def _should_prefer_cooked_default(normalized_name: str) -> bool:
+    query = normalized_name.lower().strip()
+    has_grain_token = _has_any_token(query, GRAIN_DEFAULT_COOKED_TOKENS)
+    has_explicit_state = (
+        _has_any_token(query, FRIED_QUERY_TOKENS)
+        or _has_any_token(query, COOKED_QUERY_TOKENS)
+        or _has_any_token(query, RAW_QUERY_TOKENS)
     )
+    return has_grain_token and not has_explicit_state
+
+
+def _build_query_candidates(normalized_name: str) -> list[str]:
+    """Build prioritized USDA query variants to improve baseline food matching quality."""
+    lowered = normalized_name.lower().strip()
+    candidates = [normalized_name]
+
+    if _should_prefer_cooked_default(normalized_name):
+        candidates.insert(0, f"{normalized_name} cooked")
+
+    if lowered in COFFEE_PLAIN_TOKENS:
+        candidates.insert(0, "coffee brewed")
+
+    if lowered in MILK_PLAIN_TOKENS:
+        candidates.insert(0, "milk fluid")
+
+    # Deduplicate preserving order.
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = candidate.lower().strip()
+        if key in seen:
+            continue
+        deduplicated.append(candidate)
+        seen.add(key)
+
+    return deduplicated
+
+
+def _semantic_adjustment(normalized_name: str, description: str) -> float:
+    """Apply domain-specific penalties for semantically mismatched USDA entries."""
+    query = normalized_name.lower().strip()
+    desc = description.lower().strip()
+
+    query_has_animal_protein = _has_any_token(query, ANIMAL_PROTEIN_TOKENS)
+    desc_is_meatless = _has_any_token(desc, MEATLESS_TOKENS)
+    if query_has_animal_protein and desc_is_meatless:
+        return -20.0
+
+    has_grain_token = _has_any_token(query, GRAIN_DEFAULT_COOKED_TOKENS)
+    has_explicit_state = (
+        _has_any_token(query, FRIED_QUERY_TOKENS)
+        or _has_any_token(query, COOKED_QUERY_TOKENS)
+        or _has_any_token(query, RAW_QUERY_TOKENS)
+    )
+    if has_grain_token and not has_explicit_state and _has_any_token(desc, ADDED_FAT_TOKENS):
+        return -5.0
+
+    query_tokens = [
+        token
+        for token in query.replace(",", " ").split()
+        if token
+        and token not in QUERY_STOPWORDS
+        and token not in FRIED_QUERY_TOKENS
+        and token not in COOKED_QUERY_TOKENS
+        and token not in RAW_QUERY_TOKENS
+    ]
+
+    if query_tokens:
+        first_desc_token = desc.split(",", maxsplit=1)[0].strip().split(" ", maxsplit=1)[0]
+        for token in query_tokens:
+            if first_desc_token == token:
+                return 8.0
+            if f"with {token}" in desc and first_desc_token != token:
+                return -40.0
+
+    return 0.0
 
 
 def rank_usda_results(normalized_name: str, foods: list[dict[str, Any]]) -> list[RankedUSDAResult]:
@@ -182,7 +354,12 @@ def rank_usda_results(normalized_name: str, foods: list[dict[str, Any]]) -> list
 
         category = _extract_food_category(food)
         similarity = _compute_similarity_score(normalized_name, description)
-        weighted = similarity + _category_priority_bonus(category)
+        weighted = (
+            similarity
+            + _category_priority_bonus(category)
+            + _preparation_alignment_bonus(normalized_name, description)
+            + _semantic_adjustment(normalized_name, description)
+        )
 
         ranked.append(
             RankedUSDAResult(
@@ -210,39 +387,54 @@ def rank_usda_results(normalized_name: str, foods: list[dict[str, Any]]) -> list
 
 
 def _search_usda_top_results(normalized_name: str) -> list[dict[str, Any]]:
-    """Call USDA API and return top 5 candidate foods."""
+    """Call USDA API and return candidate foods, expanding cooked queries for grains."""
     if not settings.USDA_API_KEY:
         raise USDAServiceError("missing_usda_api_key")
 
-    payload: dict[str, Any] = {
-        "query": normalized_name,
-        "pageSize": 5,
-    }
+    query_candidates = _build_query_candidates(normalized_name)
 
-    try:
-        response = httpx.post(
-            USDA_SEARCH_URL,
-            params={"api_key": settings.USDA_API_KEY},
-            json=payload,
-            timeout=15.0,
-        )
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise USDAServiceError("usda_request_failed") from exc
+    merged: list[dict[str, Any]] = []
+    seen_fdc_ids: set[str] = set()
 
-    data: dict[str, Any] = response.json()
-    foods: Any = data.get("foods", [])
+    for query_candidate in query_candidates:
+        payload: dict[str, Any] = {
+            "query": query_candidate,
+            "pageSize": 5,
+        }
 
-    if not isinstance(foods, list) or not foods:
+        try:
+            response = httpx.post(
+                USDA_SEARCH_URL,
+                params={"api_key": settings.USDA_API_KEY},
+                json=payload,
+                timeout=15.0,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise USDAServiceError("usda_request_failed") from exc
+
+        data: dict[str, Any] = response.json()
+        foods: Any = data.get("foods", [])
+        if not isinstance(foods, list):
+            continue
+
+        foods_list = cast(list[Any], foods)
+        for food_item in foods_list[:5]:
+            if not isinstance(food_item, dict):
+                continue
+
+            typed_item = cast(dict[str, Any], food_item)
+            fdc_id = str(typed_item.get("fdcId", "")).strip()
+            if not fdc_id or fdc_id in seen_fdc_ids:
+                continue
+
+            merged.append(typed_item)
+            seen_fdc_ids.add(fdc_id)
+
+    if not merged:
         raise USDAServiceError("food_not_found")
 
-    foods_list = cast(list[Any], foods)
-    typed_foods: list[dict[str, Any]] = []
-    for food_item in foods_list[:5]:
-        if isinstance(food_item, dict):
-            typed_foods.append(cast(dict[str, Any], food_item))
-
-    return typed_foods
+    return merged[:10]
 
 
 def _select_best_candidate(normalized_name: str, ranked_results: list[RankedUSDAResult]) -> RankedUSDAResult:

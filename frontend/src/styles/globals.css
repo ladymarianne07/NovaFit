@@ -1353,6 +1353,12 @@
   gap: 0.75rem;
 }
 
+.nutrition-meal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .nutrition-meal-title-group {
   display: flex;
   flex-direction: column;
@@ -1370,6 +1376,29 @@
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.75);
   white-space: nowrap;
+}
+
+.nutrition-meal-delete {
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.45rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.nutrition-meal-delete:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.7);
+}
+
+.nutrition-meal-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .nutrition-meal-type-badge {

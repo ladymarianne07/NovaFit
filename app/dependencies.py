@@ -11,7 +11,7 @@ from .core.custom_exceptions import TokenValidationError
 
 
 # Security scheme for Bearer token
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def get_user_service(db: Session = Depends(get_database_session)) -> UserService:
@@ -25,7 +25,7 @@ def get_biometric_service() -> BiometricService:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     user_service: UserService = Depends(get_user_service)
 ) -> User:
     """
@@ -38,6 +38,9 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    if credentials is None:
+        raise credentials_exception
+
     try:
         # Extract user ID from token
         user_id = extract_user_id_from_token(credentials.credentials)

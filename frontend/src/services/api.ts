@@ -101,6 +101,7 @@ export interface MacronutrientData {
 }
 
 export interface MealLogData {
+  meal_type?: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
   food_name: string
   quantity_grams: number
   calories_per_100g: number
@@ -117,6 +118,32 @@ export interface MealLogResponse extends MealLogData {
   total_protein: number
   total_fat: number
   event_timestamp: string
+}
+
+export interface MealItemResponse {
+  food_name: string
+  quantity_grams: number
+  calories_per_100g: number
+  carbs_per_100g: number
+  protein_per_100g: number
+  fat_per_100g: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
+}
+
+export interface MealGroupResponse {
+  id: string
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
+  meal_label: string
+  event_timestamp: string
+  items: MealItemResponse[]
+  total_quantity_grams: number
+  total_calories: number
+  total_carbs: number
+  total_protein: number
+  total_fat: number
 }
 
 export interface SuggestionData {
@@ -221,8 +248,19 @@ export const nutritionAPI = {
     return response.data
   },
 
+  getMeals: async (targetDate?: string): Promise<MealGroupResponse[]> => {
+    const params = targetDate ? { target_date: targetDate } : {}
+    const response = await api.get('/nutrition/meals', { params })
+    return response.data
+  },
+
   logMeal: async (mealData: MealLogData): Promise<MealLogResponse> => {
     const response = await api.post('/nutrition/meals', mealData)
+    return response.data
+  },
+
+  deleteMeal: async (mealGroupId: string): Promise<{ status: string }> => {
+    const response = await api.delete(`/nutrition/meals/${mealGroupId}`)
     return response.data
   },
 

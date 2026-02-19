@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base
 from ..models.food import FoodEntry  # noqa: F401 - ensure model registration
+from ..models.food_portion_cache import FoodPortionCache  # noqa: F401 - ensure model registration
 from ..config import settings
 
 
@@ -64,6 +65,12 @@ def ensure_schema_compatibility() -> None:
         return
 
     missing_columns = get_missing_user_columns()
+
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+    if "food_portion_cache" not in table_names:
+        logger.info("Creating missing table: food_portion_cache")
+        Base.metadata.create_all(bind=engine)
 
     if not missing_columns:
         return

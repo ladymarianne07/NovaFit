@@ -165,3 +165,52 @@ def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monke
     assert response.status_code == 200
     data: dict[str, Any] = response.json()
     assert data["food"] == "oatmeal"
+
+
+def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.usda_service import USDAFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [
+            ParsedFoodPayload(name="coffee", quantity=0.5, unit="cup"),
+            ParsedFoodPayload(name="milk", quantity=0.5, unit="cup"),
+        ]
+
+    def fake_search_food_by_name(normalized_name: str):
+        if normalized_name == "coffee":
+            return USDAFoodResult(
+                fdc_id="coffee-1",
+                description="Brewed coffee",
+                calories_per_100g=1.0,
+                carbs_per_100g=0.0,
+                protein_per_100g=0.1,
+                fat_per_100g=0.0,
+                serving_size_grams=240.0,
+            )
+
+        return USDAFoodResult(
+            fdc_id="milk-1",
+            description="Whole milk",
+            calories_per_100g=61.0,
+            carbs_per_100g=4.8,
+            protein_per_100g=3.2,
+            fat_per_100g=3.3,
+            serving_size_grams=244.0,
+        )
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "cafe con leche"},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+
+    assert data["food"] == "coffee + milk"
+    assert data["quantity_grams"] == 242.0
+    assert data["total_calories"] > 70
+    assert data["total_carbs"] > 5

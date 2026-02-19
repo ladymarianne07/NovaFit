@@ -87,6 +87,8 @@ class FoodItemBase(BaseModel):
 class MealLogCreate(BaseModel):
     """Create meal log entry"""
     meal_type: str = Field(default="meal", min_length=1, max_length=20)
+    meal_group_id: Optional[str] = Field(default=None, max_length=64)
+    meal_label: Optional[str] = Field(default=None, max_length=80)
     food_name: str = Field(..., min_length=1, max_length=200)
     quantity_grams: float = Field(gt=0, description="Quantity consumed in grams")
     
@@ -112,3 +114,31 @@ class MealLogResponse(MealLogCreate):
     
     class Config:
         from_attributes = True
+
+
+class MealItemResponse(BaseModel):
+    """One food item inside a grouped meal."""
+    food_name: str
+    quantity_grams: float
+    calories_per_100g: float
+    carbs_per_100g: float
+    protein_per_100g: float
+    fat_per_100g: float
+    total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float
+
+
+class MealGroupResponse(BaseModel):
+    """Grouped meal with multiple items."""
+    id: str
+    meal_type: str
+    meal_label: str
+    event_timestamp: datetime
+    items: list[MealItemResponse]
+    total_quantity_grams: float
+    total_calories: float
+    total_carbs: float
+    total_protein: float
+    total_fat: float

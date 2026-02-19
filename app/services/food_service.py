@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from ..models.food import FoodEntry
 from ..schemas.food import (
@@ -12,12 +13,14 @@ from ..schemas.nutrition import MealLogCreate
 from .food_parser import (
     FoodParserError,
     convert_to_grams,
+    estimate_serving_grams,
     is_serving_unit,
     meal_label_for_type,
     parse_food_input,
     split_text_by_meal_type,
 )
 from .nutrition_service import NutritionService
+from .portion_resolver_service import PortionResolverService
 from .usda_service import USDAServiceError, search_food_by_name
 
 
@@ -29,6 +32,31 @@ class FoodService:
     """Service layer for food parsing, USDA lookup, caching, and nutrition calculation."""
 
     DEFAULT_SERVING_GRAMS = 100.0
+    PORTION_UNITS = {
+        "serving",
+        "portion",
+        "porción",
+        "porcion",
+        "cup",
+        "cups",
+        "taza",
+        "tazas",
+        "tablespoon",
+        "tablespoons",
+        "tbsp",
+        "cucharada",
+        "cucharadas",
+        "teaspoon",
+        "teaspoons",
+        "tsp",
+        "cucharadita",
+        "cucharaditas",
+        "piece",
+        "pieza",
+        "unidad",
+        "unit",
+        "ml",
+    }
 
     @classmethod
     def _resolve_item_nutrition(
@@ -60,40 +88,44 @@ class FoodService:
         )
 
         usda_match = None
-        if cached_entry and not requires_serving_resolution:
+        try:
+            # Prefer fresh USDA values to avoid stale cached mismatches.
+            usda_match = search_food_by_name(normalized_name)
+            usda_fdc_id = usda_match.fdc_id
+            calories_per_100g = usda_match.calories_per_100g
+            carbs_per_100g = usda_match.carbs_per_100g
+            protein_per_100g = usda_match.protein_per_100g
+            fat_per_100g = usda_match.fat_per_100g
+        except USDAServiceError as exc:
+            # Fallback to latest cached calories if available.
+            if cached_entry is None:
+                raise FoodServiceError(str(exc)) from exc
+
             usda_fdc_id = cached_entry.usda_fdc_id
             calories_per_100g = float(cached_entry.calories_per_100g)
             carbs_per_100g = 0.0
             protein_per_100g = 0.0
             fat_per_100g = 0.0
 
-            try:
-                usda_match = search_food_by_name(normalized_name)
-                carbs_per_100g = usda_match.carbs_per_100g
-                protein_per_100g = usda_match.protein_per_100g
-                fat_per_100g = usda_match.fat_per_100g
-            except USDAServiceError:
-                pass
-        else:
-            try:
-                usda_match = search_food_by_name(normalized_name)
-            except USDAServiceError as exc:
-                raise FoodServiceError(str(exc)) from exc
-
-            usda_fdc_id = usda_match.fdc_id
-            calories_per_100g = usda_match.calories_per_100g
-            carbs_per_100g = usda_match.carbs_per_100g
-            protein_per_100g = usda_match.protein_per_100g
-            fat_per_100g = usda_match.fat_per_100g
-
         if requires_serving_resolution:
             serving_size_grams = usda_match.serving_size_grams if usda_match else None
-            if serving_size_grams is None:
-                serving_size_grams = cls.DEFAULT_SERVING_GRAMS
-            quantity_grams = round(quantity * serving_size_grams, 2)
+            portion_grams = PortionResolverService.resolve_portion_grams(
+                db=db,
+                food_name=normalized_name,
+                unit=parsed_unit,
+                preferred_serving_grams=serving_size_grams,
+            )
+            quantity_grams = round(quantity * portion_grams, 2)
+        elif parsed_unit in cls.PORTION_UNITS:
+            portion_grams = PortionResolverService.resolve_portion_grams(
+                db=db,
+                food_name=normalized_name,
+                unit=parsed_unit,
+            )
+            quantity_grams = round(quantity * portion_grams, 2)
         else:
             try:
-                quantity_grams = convert_to_grams(quantity, parsed_unit)
+                quantity_grams = convert_to_grams(quantity, parsed_unit, normalized_name)
             except FoodParserError as exc:
                 raise FoodServiceError(str(exc)) from exc
 
@@ -150,6 +182,13 @@ class FoodService:
             meal_total_fat = 0.0
             meal_timestamp: datetime | None = None
 
+            meal_label = meal_label_for_type(meal_type)
+            if meal_type == "meal":
+                generic_meal_counter += 1
+                meal_label = f"Comida {generic_meal_counter}"
+
+            meal_group_id = uuid4().hex
+
             for parsed in parsed_items:
                 normalized_name = parsed.name.strip().lower()
                 if not normalized_name:
@@ -189,6 +228,8 @@ class FoodService:
                     user_id=user_id,
                     meal_data=MealLogCreate(
                         meal_type=meal_type,
+                        meal_group_id=meal_group_id,
+                        meal_label=meal_label,
                         food_name=normalized_name,
                         quantity_grams=quantity_grams,
                         calories_per_100g=calories_per_100g,
@@ -224,11 +265,6 @@ class FoodService:
 
             if not meal_items:
                 continue
-
-            meal_label = meal_label_for_type(meal_type)
-            if meal_type == "meal":
-                generic_meal_counter += 1
-                meal_label = f"Comida {generic_meal_counter}"
 
             if meal_timestamp is None:
                 meal_timestamp = datetime.now(timezone.utc)

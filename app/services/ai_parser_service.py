@@ -27,20 +27,21 @@ SYSTEM_PROMPT = (
     "You convert Spanish input into structured English JSON.\n"
     "You do not provide explanations.\n"
     "Extract all foods mentioned, even when the text includes multiple meals (breakfast/lunch/dinner/snacks).\n"
+    "If a combined food appears (e.g., 'cafe con leche', 'pollo con arroz'), split it into separate items.\n"
     "Ignore meal labels in the output and return only food items.\n"
     "If input is not food-related, return:\n"
     '{ "error": "invalid_domain" }\n'
     "If quantity is missing or unclear, return:\n"
     '{ "name": "english food name", "quantity": 1, "unit": "serving" }\n'
     "If input contains multiple foods, return:\n"
-    '{ "items": [{"name": "english food name", "quantity": number, "unit": "grams" or "serving"}] }\n'
+    '{ "items": [{"name": "english food name", "quantity": number, "unit": "grams" or "serving" or "cup" or "tablespoon" or "teaspoon" or "ml"}] }\n'
     "If the user gives a general food input with no explicit amount, infer one standard serving.\n"
     "Output must be valid JSON only.\n"
     "Format:\n"
     "{\n"
     '"name": "english food name",\n'
     '"quantity": number,\n'
-    '"unit": "grams" or "serving"\n'
+    '"unit": "grams" or "serving" or "cup" or "tablespoon" or "teaspoon" or "ml"\n'
     "}\n"
     "No additional text."
 )

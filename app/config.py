@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "NovaFitness API"
     VERSION: str = "1.0.0"
     DEBUG: bool = True
+    APP_TIMEZONE: str = "America/Argentina/Buenos_Aires"
     
     # Database
     DATABASE_URL: str = "sqlite:///./novafitness.db"

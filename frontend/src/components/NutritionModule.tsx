@@ -1,26 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Brain, Clock3, Sparkles, X } from 'lucide-react'
-import { foodAPI } from '../services/api'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Brain, Clock3, Sparkles, Trash2 } from 'lucide-react'
+import { foodAPI, nutritionAPI, MealGroupResponse } from '../services/api'
 
 interface NutritionModuleProps {
   className?: string
 }
 
-interface MealEntry {
-  id: string
-  title: string
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
-  source: 'ia'
-  createdAt: string
-  dateKey: string
-  totalCalories: number
-  totalCarbs: number
-  totalProtein: number
-  totalFat: number
-  itemsSummary: string
-}
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
 
-const MEAL_TYPE_LABELS: Record<MealEntry['mealType'], string> = {
+const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Desayuno',
   lunch: 'Almuerzo',
   dinner: 'Cena',
@@ -28,77 +16,56 @@ const MEAL_TYPE_LABELS: Record<MealEntry['mealType'], string> = {
   meal: 'Comida'
 }
 
-const STORAGE_KEYS = {
-  MEALS: 'nova_meals_v1'
-} as const
-
-const getTodayKey = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = `${now.getMonth() + 1}`.padStart(2, '0')
-  const day = `${now.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
+const normalizeMealType = (value: string): MealType => {
+  const normalized = value?.toLowerCase()
+  if (normalized === 'breakfast' || normalized === 'lunch' || normalized === 'dinner' || normalized === 'snack') {
+    return normalized
+  }
+  return 'meal'
 }
 
 const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => {
-  const [allMeals, setAllMeals] = useState<MealEntry[]>([])
+  const [meals, setMeals] = useState<MealGroupResponse[]>([])
   const [isAiComposerOpen, setIsAiComposerOpen] = useState(false)
   const [aiMealInput, setAiMealInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoadingMeals, setIsLoadingMeals] = useState(true)
+  const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
-  const todayKey = getTodayKey()
+  const [mealsError, setMealsError] = useState('')
 
-  useEffect(() => {
-    const savedMeals = window.localStorage.getItem(STORAGE_KEYS.MEALS)
-
-    if (savedMeals) {
-      try {
-        const parsedMeals = JSON.parse(savedMeals) as MealEntry[]
-        setAllMeals(parsedMeals)
-      } catch {
-        setAllMeals([])
-      }
+  const fetchMeals = useCallback(async () => {
+    try {
+      setIsLoadingMeals(true)
+      setMealsError('')
+      const data = await nutritionAPI.getMeals()
+      setMeals(data)
+    } catch {
+      setMealsError('No se pudieron cargar las comidas.')
+    } finally {
+      setIsLoadingMeals(false)
     }
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(allMeals))
-  }, [allMeals])
+    fetchMeals()
+  }, [fetchMeals])
+
+  useEffect(() => {
+    const handler = () => {
+      fetchMeals()
+    }
+    window.addEventListener('nutrition:updated', handler)
+    return () => window.removeEventListener('nutrition:updated', handler)
+  }, [fetchMeals])
 
   const todayMeals = useMemo(
     () =>
-      allMeals
-        .filter((meal) => meal.dateKey === todayKey)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [allMeals, todayKey]
+      [...meals].sort(
+        (a, b) => new Date(b.event_timestamp).getTime() - new Date(a.event_timestamp).getTime()
+      ),
+    [meals]
   )
-
-  const addMeal = (entry: {
-    title: string
-    mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'meal'
-    createdAt: string
-    totalCalories: number
-    totalCarbs: number
-    totalProtein: number
-    totalFat: number
-    itemsSummary: string
-  }) => {
-    const newMeal: MealEntry = {
-      id: `meal-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      title: entry.title,
-      mealType: entry.mealType,
-      source: 'ia',
-      createdAt: entry.createdAt,
-      dateKey: todayKey,
-      totalCalories: entry.totalCalories,
-      totalCarbs: entry.totalCarbs,
-      totalProtein: entry.totalProtein,
-      totalFat: entry.totalFat,
-      itemsSummary: entry.itemsSummary
-    }
-
-    setAllMeals((previousMeals) => [newMeal, ...previousMeals])
-  }
 
   const handleAddFromAi = async () => {
     const content = aiMealInput.trim()
@@ -108,20 +75,8 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       setIsSubmitting(true)
       setErrorMessage('')
 
-      const parsed = await foodAPI.parseAndLog({ text: content })
-
-      parsed.meals.forEach((meal) => {
-        addMeal({
-          title: meal.meal_label,
-          mealType: meal.meal_type,
-          createdAt: meal.meal_timestamp,
-          totalCalories: meal.total_calories,
-          totalCarbs: meal.total_carbs,
-          totalProtein: meal.total_protein,
-          totalFat: meal.total_fat,
-          itemsSummary: meal.items.map((item) => item.food).join(', ')
-        })
-      })
+      await foodAPI.parseAndLog({ text: content })
+      await fetchMeals()
 
       window.dispatchEvent(new Event('nutrition:updated'))
 
@@ -148,8 +103,17 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
     }
   }
 
-  const clearMeals = () => {
-    setAllMeals((previousMeals) => previousMeals.filter((meal) => meal.dateKey !== todayKey))
+  const handleDeleteMeal = async (mealGroupId: string) => {
+    try {
+      setDeletingMealId(mealGroupId)
+      await nutritionAPI.deleteMeal(mealGroupId)
+      setMeals((previousMeals) => previousMeals.filter((meal) => meal.id !== mealGroupId))
+      window.dispatchEvent(new Event('nutrition:updated'))
+    } catch {
+      setMealsError('No se pudo eliminar la comida.')
+    } finally {
+      setDeletingMealId(null)
+    }
   }
 
   const formatMacro = (value: number) => Math.round(value)
@@ -209,61 +173,82 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
           <h3 className="nutrition-card-title">
             <Clock3 size={18} /> Mis comidas
           </h3>
-          {todayMeals.length > 0 && (
-            <button type="button" className="nutrition-chip-button" onClick={clearMeals}>
-              <X size={14} /> Limpiar día
-            </button>
-          )}
         </div>
 
-        {todayMeals.length === 0 ? (
+        {mealsError && (
+          <p className="error-message" role="alert">
+            {mealsError}
+          </p>
+        )}
+
+        {isLoadingMeals ? (
+          <div className="nutrition-empty-state">
+            <p>Cargando comidas...</p>
+          </div>
+        ) : todayMeals.length === 0 ? (
           <div className="nutrition-empty-state">
             <p>Hoy todavía no cargaste comidas.</p>
           </div>
         ) : (
           <div className="nutrition-meals-list">
-            {todayMeals.map((meal) => (
-              <article key={meal.id} className="nutrition-meal-item">
-                <div className="nutrition-meal-top">
-                  <div className="nutrition-meal-title-group">
-                    <p className="nutrition-meal-name">{meal.title}</p>
-                    <span className={`nutrition-meal-type-badge ${meal.mealType}`}>
-                      {MEAL_TYPE_LABELS[meal.mealType]}
-                    </span>
+            {todayMeals.map((meal) => {
+              const normalizedMealType = normalizeMealType(meal.meal_type ?? 'meal')
+              const itemsSummary = meal.items.map((item) => item.food_name).join(', ')
+
+              return (
+                <article key={meal.id} className="nutrition-meal-item">
+                  <div className="nutrition-meal-top">
+                    <div className="nutrition-meal-title-group">
+                      <p className="nutrition-meal-name">{meal.meal_label}</p>
+                      <span className={`nutrition-meal-type-badge ${normalizedMealType}`}>
+                        {MEAL_TYPE_LABELS[normalizedMealType]}
+                      </span>
+                    </div>
+
+                    <div className="nutrition-meal-actions">
+                      <span className="nutrition-meal-time">
+                        {new Date(meal.event_timestamp).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="nutrition-meal-delete"
+                        onClick={() => handleDeleteMeal(meal.id)}
+                        disabled={deletingMealId === meal.id}
+                        aria-label="Eliminar comida"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
 
-                  <span className="nutrition-meal-time">
-                    {new Date(meal.createdAt).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                </div>
+                  <p className="nutrition-meal-items-line">
+                    <strong>Alimentos:</strong> {itemsSummary}
+                  </p>
 
-                <p className="nutrition-meal-items-line">
-                  <strong>Alimentos:</strong> {meal.itemsSummary}
-                </p>
-
-                <div className="nutrition-meal-macro-grid">
-                  <div className="nutrition-macro-pill calories">
-                    <span className="nutrition-macro-label">Calorías</span>
-                    <span className="nutrition-macro-value">{meal.totalCalories.toFixed(0)} kcal</span>
+                  <div className="nutrition-meal-macro-grid">
+                    <div className="nutrition-macro-pill calories">
+                      <span className="nutrition-macro-label">Calorías</span>
+                      <span className="nutrition-macro-value">{meal.total_calories.toFixed(0)} kcal</span>
+                    </div>
+                    <div className="nutrition-macro-pill carbs">
+                      <span className="nutrition-macro-label">Carbohidratos</span>
+                      <span className="nutrition-macro-value">{formatMacro(meal.total_carbs)} g</span>
+                    </div>
+                    <div className="nutrition-macro-pill protein">
+                      <span className="nutrition-macro-label">Proteínas</span>
+                      <span className="nutrition-macro-value">{formatMacro(meal.total_protein)} g</span>
+                    </div>
+                    <div className="nutrition-macro-pill fat">
+                      <span className="nutrition-macro-label">Grasas</span>
+                      <span className="nutrition-macro-value">{formatMacro(meal.total_fat)} g</span>
+                    </div>
                   </div>
-                  <div className="nutrition-macro-pill carbs">
-                    <span className="nutrition-macro-label">Carbohidratos</span>
-                    <span className="nutrition-macro-value">{formatMacro(meal.totalCarbs)} g</span>
-                  </div>
-                  <div className="nutrition-macro-pill protein">
-                    <span className="nutrition-macro-label">Proteínas</span>
-                    <span className="nutrition-macro-value">{formatMacro(meal.totalProtein)} g</span>
-                  </div>
-                  <div className="nutrition-macro-pill fat">
-                    <span className="nutrition-macro-label">Grasas</span>
-                    <span className="nutrition-macro-value">{formatMacro(meal.totalFat)} g</span>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
         )}
       </article>

@@ -7,7 +7,7 @@ Provides endpoints for:
 - Getting AI-powered nutrition suggestions
 """
 from datetime import date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,8 +16,9 @@ from ..db.database import get_database_session
 from ..db.models import User
 from ..schemas.nutrition import (
     MacronutrientResponse,
-    MealLogCreate, 
-    MealLogResponse
+    MealLogCreate,
+    MealLogResponse,
+    MealGroupResponse,
 )
 from ..services.nutrition_service import NutritionService
 from ..core.custom_exceptions import ValidationError, UserNotFoundError
@@ -85,6 +86,40 @@ async def log_meal(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to log meal"
         )
+
+
+@router.get("/meals", response_model=List[MealGroupResponse])
+async def get_daily_meals(
+    target_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_database_session),
+):
+    """Get meal entries for the current day (or a specific date)."""
+    try:
+        user_id: int = current_user.id  # type: ignore
+        return NutritionService.get_daily_meals(db=db, user_id=user_id, target_date=target_date)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve meals"
+        )
+
+
+@router.delete("/meals/{meal_group_id}")
+async def delete_meal(
+    meal_group_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_database_session),
+):
+    """Delete a meal entry and roll back its nutrition impact."""
+    user_id: int = current_user.id  # type: ignore
+    deleted = NutritionService.delete_meal(db=db, user_id=user_id, meal_group_id=meal_group_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Meal not found"
+        )
+    return {"status": "deleted"}
 
 
 @router.get("/suggestions")
