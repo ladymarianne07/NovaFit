@@ -1,7 +1,6 @@
 import axios from 'axios'
 
-// DEBUG: Hardcode backend URL temporarily 
-const API_BASE_URL = 'https://novafit-atzy.onrender.com'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
 // API base configuration
 const api = axios.create({
