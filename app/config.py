@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         "https://localhost:3000", 
         "https://novafitness-frontend.onrender.com",  # Production frontend
         "https://*.onrender.com",  # Render.com domains
+        "https://nova-fit-kappa.vercel.app",  # Vercel production frontend
+        "https://*.vercel.app",  # All Vercel preview deployments
         # Add your custom domain here when available
         # "https://novafitness.com",
     ]
