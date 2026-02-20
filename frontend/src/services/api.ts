@@ -1,8 +1,11 @@
 import axios from 'axios'
 
+// DEBUG: Hardcode backend URL temporarily 
+const API_BASE_URL = 'https://novafit-atzy.onrender.com'
+
 // API base configuration
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
