@@ -6,6 +6,7 @@ psycopg2-binary==2.9.9  # PostgreSQL adapter (future)
 python-jose[cryptography]==3.3.0  # JWT tokens
 python-multipart==0.0.6  # Form data support
 pydantic[email]==2.5.0  # Email validation
+pydantic-settings==2.1.0  # Settings management
 python-dotenv==1.0.0  # Environment variables
 
 # Development dependencies
