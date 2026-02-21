@@ -102,8 +102,8 @@ describe('Register Page - Glassmorphism Design System Verification', () => {
     render(<RegisterWrapper />)
 
     // ✅ Verify essential form elements are present
-    expect(screen.getByText(/^nombre$/i)).toBeInTheDocument()
-    expect(screen.getByText(/^apellido$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^nombre\s*\*$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^apellido\s*\*$/i)).toBeInTheDocument()
     expect(screen.getByText(/correo electrónico/i)).toBeInTheDocument()
     expect(screen.getAllByText(/contraseña/i).length).toBeGreaterThan(0)
 

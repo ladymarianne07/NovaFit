@@ -418,11 +418,11 @@ class NutritionService:
         total_fat = 0.0
 
         for event in events:
-            data = cast(dict[str, Any], event.data) if isinstance(event.data, dict) else {}
-            total_calories += cls._safe_float(data.get("total_calories"))
-            total_carbs += cls._safe_float(data.get("total_carbs"))
-            total_protein += cls._safe_float(data.get("total_protein"))
-            total_fat += cls._safe_float(data.get("total_fat"))
+            event_totals = cls._extract_event_totals(event)
+            total_calories += event_totals["total_calories"]
+            total_carbs += event_totals["total_carbs"]
+            total_protein += event_totals["total_protein"]
+            total_fat += event_totals["total_fat"]
             setattr(event, "is_deleted", True)
 
         carbs_current = cls._safe_float(nutrition.carbs_consumed)
@@ -437,6 +437,40 @@ class NutritionService:
 
         db.commit()
         return True
+
+
+    @classmethod
+    def _extract_event_totals(cls, event: Event) -> dict[str, float]:
+        """Extract nutrition totals from an event with fallback for legacy payloads."""
+        data = cast(dict[str, Any], event.data) if isinstance(event.data, dict) else {}
+
+        quantity_grams = cls._safe_float(data.get("quantity_grams"))
+        calories_per_100g = cls._safe_float(data.get("calories_per_100g"))
+        carbs_per_100g = cls._safe_float(data.get("carbs_per_100g"))
+        protein_per_100g = cls._safe_float(data.get("protein_per_100g"))
+        fat_per_100g = cls._safe_float(data.get("fat_per_100g"))
+        ratio = quantity_grams / 100.0 if quantity_grams > 0 else 0.0
+
+        total_calories = cls._safe_float(data.get("total_calories"))
+        total_carbs = cls._safe_float(data.get("total_carbs"))
+        total_protein = cls._safe_float(data.get("total_protein"))
+        total_fat = cls._safe_float(data.get("total_fat"))
+
+        if total_calories <= 0 and ratio > 0:
+            total_calories = calories_per_100g * ratio
+        if total_carbs <= 0 and ratio > 0:
+            total_carbs = carbs_per_100g * ratio
+        if total_protein <= 0 and ratio > 0:
+            total_protein = protein_per_100g * ratio
+        if total_fat <= 0 and ratio > 0:
+            total_fat = fat_per_100g * ratio
+
+        return {
+            "total_calories": max(0.0, total_calories),
+            "total_carbs": max(0.0, total_carbs),
+            "total_protein": max(0.0, total_protein),
+            "total_fat": max(0.0, total_fat),
+        }
 
 
     @classmethod

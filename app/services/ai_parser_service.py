@@ -21,6 +21,15 @@ def _sanitize_url_for_logging(url: str) -> str:
     return re.sub(r'key=[^&\s]+', 'key=***REDACTED***', url)
 
 
+def _api_key_fingerprint(api_key: str | None) -> str:
+    """Return non-sensitive API key fingerprint for diagnostics."""
+    if not api_key:
+        return "<missing>"
+    if len(api_key) <= 8:
+        return "***"
+    return f"{api_key[:4]}...{api_key[-4:]}"
+
+
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 SYSTEM_PROMPT = (
@@ -154,7 +163,20 @@ def parse_food_with_gemini(text: str) -> Any:
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response is not None else None
         sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)
-        logger.error("Gemini HTTP status error: %s (URL: %s)", exc, sanitized_url)
+        response_preview = ""
+        if exc.response is not None:
+            try:
+                response_preview = exc.response.text[:600]
+            except Exception:
+                response_preview = "<unavailable_response_body>"
+
+        logger.error(
+            "Gemini HTTP status error: %s (URL: %s, key=%s, body=%s)",
+            exc,
+            sanitized_url,
+            _api_key_fingerprint(settings.GEMINI_API_KEY),
+            response_preview,
+        )
         if status_code == 429:
             raise AIParserError("gemini_quota_exceeded") from exc
         raise AIParserError("gemini_request_failed") from exc

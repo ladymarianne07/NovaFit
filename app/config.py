@@ -1,10 +1,15 @@
 import os
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application configuration"""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+    )
     
     # App settings
     APP_NAME: str = "NovaFitness API"
@@ -45,9 +50,31 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """
+        Source precedence (highest → lowest):
+        1) explicit init kwargs,
+        2) .env file,
+        3) OS environment variables,
+        4) file secrets.
+
+        This prevents stale machine/user env vars from unintentionally overriding
+        freshly updated local .env values during development.
+        """
+        return (
+            init_settings,
+            dotenv_settings,
+            env_settings,
+            file_secret_settings,
+        )
 
 
 # Global settings instance

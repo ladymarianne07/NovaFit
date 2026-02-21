@@ -1,4 +1,7 @@
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from app.config import settings
 
 
 def _get_auth_header(client, test_user_data):
@@ -27,7 +30,14 @@ def test_daily_nutrition_resets_next_day_but_previous_day_persists(client, test_
     log_response = client.post("/nutrition/meals", json=meal_payload, headers=headers)
     assert log_response.status_code == 200
 
-    today = date.today()
+    try:
+        app_tz = ZoneInfo(settings.APP_TIMEZONE)
+    except ZoneInfoNotFoundError:
+        app_tz = timezone.utc
+
+    event_timestamp_raw = log_response.json()["event_timestamp"]
+    event_timestamp = datetime.fromisoformat(event_timestamp_raw.replace("Z", "+00:00"))
+    today = event_timestamp.astimezone(app_tz).date()
     tomorrow = today + timedelta(days=1)
 
     today_response = client.get(f"/nutrition/macros?target_date={today.isoformat()}", headers=headers)

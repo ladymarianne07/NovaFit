@@ -310,7 +310,7 @@ const Register: React.FC = () => {
           <div key={step} className={`register-step-panel ${stepDirection === 'backward' ? 'register-step-backward' : 'register-step-forward'}`}>
           {step === 1 ? (
             <div className="register-step-content">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="register-step-grid">
                 <FormField
                   id="firstName"
                   label="Nombre"
@@ -325,6 +325,7 @@ const Register: React.FC = () => {
                   icon={<User className="w-5 h-5" />}
                   placeholder="Ingresa tu nombre"
                   error={step1Errors.firstName}
+                  required
                 />
                 <FormField
                   id="lastName"
@@ -340,6 +341,7 @@ const Register: React.FC = () => {
                   icon={<User className="w-5 h-5" />}
                   placeholder="Ingresa tu apellido"
                   error={step1Errors.lastName}
+                  required
                 />
               </div>
 
@@ -401,7 +403,7 @@ const Register: React.FC = () => {
             </div>
           ) : step === 2 ? (
             <div className="register-step-content">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="register-step-grid">
                 <FormField
                   id="age"
                   label="Edad"
@@ -441,7 +443,7 @@ const Register: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="register-step-grid">
                 <FormField
                   id="weight"
                   label="Peso (kg)"
