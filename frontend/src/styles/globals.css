@@ -1125,15 +1125,12 @@
 }
 
 .dashboard-global-header-logo {
-  width: 1.8rem;
-  height: 1.8rem;
+  width: auto;
+  height: 2.5rem;
   border-radius: 0.6rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
-  box-shadow: 0 8px 16px rgba(88, 28, 135, 0.32);
+  display: block;
+  object-fit: contain;
+  object-position: center;
 }
 
 .dashboard-global-header-text {

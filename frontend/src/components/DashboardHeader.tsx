@@ -1,5 +1,5 @@
 import React from 'react'
-import { LogOut, UserRound, Zap } from 'lucide-react'
+import { LogOut, UserRound } from 'lucide-react'
 
 interface DashboardHeaderProps {
   activeTab: string
@@ -25,9 +25,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   return (
     <header className="dashboard-global-header" aria-label="Header principal">
       <div className="dashboard-global-header-brand">
-        <span className="dashboard-global-header-logo" aria-hidden="true">
-          <Zap size={16} />
-        </span>
+        <img src="/Logo.png" alt="NovaFitness" className="dashboard-global-header-logo" />
         <div className="dashboard-global-header-text">
           <p className="dashboard-global-header-app">NovaFitness</p>
           <h1 className="dashboard-global-header-title">{title}</h1>

@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.svg', 'icons/icon-512.svg', 'icons/maskable-512.svg'],
+      includeAssets: ['icons/Logo.png'],
       manifest: {
         name: 'NovaFitness',
         short_name: 'NovaFitness',
@@ -21,20 +21,16 @@ export default defineConfig({
         scope: '/',
         icons: [
           {
-            src: '/icons/icon-192.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml',
+            src: '/icons/Logo.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
           },
           {
-            src: '/icons/icon-512.svg',
+            src: '/icons/Logo.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
-          },
-          {
-            src: '/icons/maskable-512.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'maskable any',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },
