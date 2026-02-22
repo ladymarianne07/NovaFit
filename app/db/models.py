@@ -41,6 +41,12 @@ class User(Base):
     protein_target_g = Column(Float, nullable=True)  # Daily protein target in grams
     fat_target_g = Column(Float, nullable=True)  # Daily fat target in grams
     carbs_target_g = Column(Float, nullable=True)  # Daily carbs target in grams
+
+    # Optional user-overridden nutrition planning values
+    custom_target_calories = Column(Float, nullable=True)  # Manual daily calories goal
+    carbs_target_percent = Column(Float, nullable=True)  # % calories from carbs
+    protein_target_percent = Column(Float, nullable=True)  # % calories from protein
+    fat_target_percent = Column(Float, nullable=True)  # % calories from fat
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

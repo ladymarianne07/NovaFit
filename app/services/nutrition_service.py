@@ -207,9 +207,10 @@ class NutritionService:
         # Get user's calorie target
         user = db.query(User).filter(User.id == user_id).first()
         if user:
+            custom_target = cls._safe_float(getattr(user, "custom_target_calories", None))
             objective_target = cls._safe_float(getattr(user, "target_calories", None))
             maintenance_target = cls._safe_float(getattr(user, "daily_caloric_expenditure", None))
-            calories_target = objective_target if objective_target > 0 else maintenance_target
+            calories_target = custom_target if custom_target > 0 else (objective_target if objective_target > 0 else maintenance_target)
         else:
             calories_target = 2000
         calories_percentage = (total_calories / calories_target * 100) if calories_target > 0 else 0

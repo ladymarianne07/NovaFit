@@ -426,19 +426,37 @@ class BiometricService:
                 {"objective": "User must have complete biometric data (TDEE and weight)"}
             )
         
-        # Calculate targets
+        # Calculate objective targets baseline
         targets = cls.calculate_objective_targets(
             tdee=user_instance.daily_caloric_expenditure,
             weight_kg=user_instance.weight,
             objective=user_instance.objective,
             aggressiveness_level=user_instance.aggressiveness_level
         )
-        
-        # Update user instance
-        user_instance.target_calories = targets['target_calories']
-        user_instance.protein_target_g = targets['protein_g']
-        user_instance.fat_target_g = targets['fat_g']
-        user_instance.carbs_target_g = targets['carbs_g']
+
+        objective_target_calories = targets['target_calories']
+
+        # Persist objective-based calories as baseline
+        user_instance.target_calories = objective_target_calories
+
+        # Resolve effective calories for macro gram targets
+        custom_target_calories = float(getattr(user_instance, 'custom_target_calories', 0) or 0)
+        effective_target_calories = custom_target_calories if custom_target_calories > 0 else objective_target_calories
+
+        # Resolve macro split from user percentages when valid, otherwise fallback to objective split
+        percentages = cls._get_effective_macro_percentages(user_instance)
+
+        protein_g, fat_g, carbs_g = cls._calculate_grams_from_percentages(
+            target_calories=effective_target_calories,
+            carbs_percent=percentages['carbs_percent'],
+            protein_percent=percentages['protein_percent'],
+            fat_percent=percentages['fat_percent'],
+        )
+
+        # Update user instance targets used by nutrition modules
+        user_instance.protein_target_g = protein_g
+        user_instance.fat_target_g = fat_g
+        user_instance.carbs_target_g = carbs_g
         
         return {
             'objective': user_instance.objective,
@@ -446,5 +464,80 @@ class BiometricService:
             'target_calories': user_instance.target_calories,
             'protein_target_g': user_instance.protein_target_g,
             'fat_target_g': user_instance.fat_target_g,
-            'carbs_target_g': user_instance.carbs_target_g
+            'carbs_target_g': user_instance.carbs_target_g,
+            'custom_target_calories': custom_target_calories if custom_target_calories > 0 else None,
+            'carbs_target_percent': percentages['carbs_percent'],
+            'protein_target_percent': percentages['protein_percent'],
+            'fat_target_percent': percentages['fat_percent'],
         }
+
+    @staticmethod
+    def _safe_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @classmethod
+    def _get_effective_macro_percentages(cls, user_instance: 'User') -> Dict[str, float]:
+        custom_carbs = cls._safe_float(getattr(user_instance, 'carbs_target_percent', None))
+        custom_protein = cls._safe_float(getattr(user_instance, 'protein_target_percent', None))
+        custom_fat = cls._safe_float(getattr(user_instance, 'fat_target_percent', None))
+
+        if cls._is_valid_percentage_distribution(custom_carbs, custom_protein, custom_fat):
+            return {
+                'carbs_percent': custom_carbs,
+                'protein_percent': custom_protein,
+                'fat_percent': custom_fat,
+            }
+
+        objective = getattr(user_instance, 'objective', None)
+        fat_percent = cls.get_fat_percent_by_objective(objective)
+        protein_factor = cls.get_protein_factor_by_objective(objective)
+        protein_g = round(float(user_instance.weight) * protein_factor)
+        protein_kcal = protein_g * 4
+        target_calories = cls._safe_float(getattr(user_instance, 'target_calories', None))
+        if target_calories <= 0:
+            target_calories = cls._safe_float(getattr(user_instance, 'daily_caloric_expenditure', None))
+
+        protein_percent = (protein_kcal / target_calories * 100) if target_calories > 0 else 25.0
+        fat_percent_value = fat_percent * 100
+        carbs_percent = max(0.0, 100.0 - protein_percent - fat_percent_value)
+
+        # Normalize if protein estimate leaves no room.
+        if not cls._is_valid_percentage_distribution(carbs_percent, protein_percent, fat_percent_value):
+            return {
+                'carbs_percent': 50.0,
+                'protein_percent': 25.0,
+                'fat_percent': 25.0,
+            }
+
+        return {
+            'carbs_percent': round(carbs_percent, 2),
+            'protein_percent': round(protein_percent, 2),
+            'fat_percent': round(fat_percent_value, 2),
+        }
+
+    @staticmethod
+    def _is_valid_percentage_distribution(carbs_percent: float, protein_percent: float, fat_percent: float) -> bool:
+        if carbs_percent <= 0 or protein_percent <= 0 or fat_percent <= 0:
+            return False
+        total = carbs_percent + protein_percent + fat_percent
+        return abs(total - 100.0) <= 0.2
+
+    @staticmethod
+    def _calculate_grams_from_percentages(
+        target_calories: float,
+        carbs_percent: float,
+        protein_percent: float,
+        fat_percent: float,
+    ) -> tuple[float, float, float]:
+        carb_kcal = target_calories * (carbs_percent / 100)
+        protein_kcal = target_calories * (protein_percent / 100)
+        fat_kcal = target_calories * (fat_percent / 100)
+
+        carbs_g = round(carb_kcal / 4)
+        protein_g = round(protein_kcal / 4)
+        fat_g = round(fat_kcal / 9)
+
+        return protein_g, fat_g, carbs_g

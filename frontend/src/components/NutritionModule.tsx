@@ -618,7 +618,7 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
             >
               <div
                 className="nutrition-slider-track"
-                style={{ transform: `translateX(-${activeMealIndex * 100}%)` }}
+                style={{ transform: `translate3d(-${activeMealIndex * 100}%, 0, 0)` }}
               >
                 {todayMeals.map((meal, index) => {
                   const normalizedMealType = normalizeMealType(meal.meal_type ?? 'meal')

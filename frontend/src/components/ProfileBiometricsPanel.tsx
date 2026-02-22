@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
+  PieChart,
   Ruler,
   Save,
   Scale,
@@ -22,7 +23,7 @@ interface ProfileBiometricsPanelProps {
 }
 
 type SiteKey = keyof SkinfoldValues
-type ProfileSection = 'personal' | 'skinfolds'
+type ProfileSection = 'personal' | 'nutrition' | 'skinfolds'
 
 const SITES: Array<{ key: SiteKey; label: string; helper: string }> = [
   { key: 'chest_mm', label: 'Pecho (pectoral)', helper: 'Pliegue diagonal entre axila y pezón.' },
@@ -56,7 +57,7 @@ const parseOptionalNumber = (value: string): number | undefined => {
 }
 
 const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user }) => {
-  const { updateBiometrics, updateObjective } = useAuth()
+  const { updateBiometrics, updateObjective, updateNutritionTargets } = useAuth()
   const { showError, showSuccess } = useToast()
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('personal')
@@ -85,6 +86,7 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
   })
 
   const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [isSavingNutrition, setIsSavingNutrition] = useState(false)
   const [isCalculating, setIsCalculating] = useState(false)
   const [result, setResult] = useState<SkinfoldCalculationResult | null>(null)
   const [history, setHistory] = useState<SkinfoldCalculationResult[]>([])
@@ -95,6 +97,12 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
   const [heightInput, setHeightInput] = useState(user.height ? String(user.height) : '')
   const [objectiveInput, setObjectiveInput] = useState<FitnessObjective>(user.objective || 'maintenance')
   const [intensityInput, setIntensityInput] = useState<number>(user.aggressiveness_level || 2)
+  const [dailyCaloriesInput, setDailyCaloriesInput] = useState(
+    user.custom_target_calories ? String(Math.round(user.custom_target_calories)) : String(Math.round(user.target_calories || user.daily_caloric_expenditure || 2000))
+  )
+  const [carbsPercentInput, setCarbsPercentInput] = useState(String(user.carbs_target_percent ?? 50))
+  const [proteinPercentInput, setProteinPercentInput] = useState(String(user.protein_target_percent ?? 25))
+  const [fatPercentInput, setFatPercentInput] = useState(String(user.fat_target_percent ?? 25))
 
   const ageYears = ageInput ? Number(ageInput) : 0
   const sex = sexInput
@@ -116,6 +124,31 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
   const objectiveChanged = useMemo(() => {
     return objectiveInput !== (user.objective || 'maintenance') || intensityInput !== (user.aggressiveness_level || 2)
   }, [objectiveInput, intensityInput, user.objective, user.aggressiveness_level])
+
+  const nutritionTargetsChanged = useMemo(() => {
+    const currentCalories = parseOptionalNumber(dailyCaloriesInput)
+    const currentCarbsPercent = parseOptionalNumber(carbsPercentInput)
+    const currentProteinPercent = parseOptionalNumber(proteinPercentInput)
+    const currentFatPercent = parseOptionalNumber(fatPercentInput)
+
+    return (
+      currentCalories !== (user.custom_target_calories ?? user.target_calories ?? user.daily_caloric_expenditure ?? undefined) ||
+      currentCarbsPercent !== (user.carbs_target_percent ?? 50) ||
+      currentProteinPercent !== (user.protein_target_percent ?? 25) ||
+      currentFatPercent !== (user.fat_target_percent ?? 25)
+    )
+  }, [
+    dailyCaloriesInput,
+    carbsPercentInput,
+    proteinPercentInput,
+    fatPercentInput,
+    user.custom_target_calories,
+    user.target_calories,
+    user.daily_caloric_expenditure,
+    user.carbs_target_percent,
+    user.protein_target_percent,
+    user.fat_target_percent,
+  ])
 
   const isProfileDirty = biometricChanged || objectiveChanged
 
@@ -171,7 +204,24 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
     setHeightInput(user.height ? String(user.height) : '')
     setObjectiveInput(user.objective || 'maintenance')
     setIntensityInput(user.aggressiveness_level || 2)
-  }, [user.age, user.gender, user.weight, user.height, user.objective, user.aggressiveness_level])
+    setDailyCaloriesInput(user.custom_target_calories ? String(Math.round(user.custom_target_calories)) : String(Math.round(user.target_calories || user.daily_caloric_expenditure || 2000)))
+    setCarbsPercentInput(String(user.carbs_target_percent ?? 50))
+    setProteinPercentInput(String(user.protein_target_percent ?? 25))
+    setFatPercentInput(String(user.fat_target_percent ?? 25))
+  }, [
+    user.age,
+    user.gender,
+    user.weight,
+    user.height,
+    user.objective,
+    user.aggressiveness_level,
+    user.custom_target_calories,
+    user.target_calories,
+    user.daily_caloric_expenditure,
+    user.carbs_target_percent,
+    user.protein_target_percent,
+    user.fat_target_percent,
+  ])
 
   useEffect(() => {
     loadHistory()
@@ -308,6 +358,50 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
     }
   }
 
+  const handleSaveNutritionTargets = async () => {
+    if (!nutritionTargetsChanged) return
+
+    const calories = Number(dailyCaloriesInput)
+    const carbsPercent = Number(carbsPercentInput)
+    const proteinPercent = Number(proteinPercentInput)
+    const fatPercent = Number(fatPercentInput)
+
+    if (Number.isNaN(calories) || calories < 1000 || calories > 6000) {
+      showError('La meta calórica debe estar entre 1000 y 6000 kcal.', 'Calorías inválidas')
+      return
+    }
+
+    const percentValues = [carbsPercent, proteinPercent, fatPercent]
+    if (percentValues.some((value) => Number.isNaN(value) || value <= 0 || value >= 100)) {
+      showError('Cada porcentaje debe ser mayor a 0 y menor a 100.', 'Porcentajes inválidos')
+      return
+    }
+
+    const totalPercent = carbsPercent + proteinPercent + fatPercent
+    if (Math.abs(totalPercent - 100) > 0.2) {
+      showError(`Los porcentajes deben sumar 100%. Actualmente suman ${totalPercent.toFixed(1)}%.`, 'Suma inválida')
+      return
+    }
+
+    setIsSavingNutrition(true)
+    try {
+      await updateNutritionTargets({
+        custom_target_calories: calories,
+        carbs_target_percent: Number(carbsPercent.toFixed(2)),
+        protein_target_percent: Number(proteinPercent.toFixed(2)),
+        fat_target_percent: Number(fatPercent.toFixed(2)),
+      })
+
+      showSuccess('Metas nutricionales actualizadas', 'Guardamos tu meta calórica y distribución de macronutrientes')
+      window.dispatchEvent(new CustomEvent('nutrition:updated'))
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'No se pudieron guardar tus metas nutricionales.'
+      showError(String(detail), 'Error al guardar')
+    } finally {
+      setIsSavingNutrition(false)
+    }
+  }
+
   const handleSkinfoldTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     skinfoldTouchStartX.current = event.touches[0]?.clientX ?? null
   }
@@ -344,6 +438,15 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
           onClick={() => setActiveSection('personal')}
         >
           <UserRound size={16} /> Datos personales
+        </button>
+        <button
+          type="button"
+          className={`profile-tab profile-tab-nutrition ${activeSection === 'nutrition' ? 'active' : ''}`}
+          role="tab"
+          aria-selected={activeSection === 'nutrition'}
+          onClick={() => setActiveSection('nutrition')}
+        >
+          <PieChart size={16} /> Metas nutricionales
         </button>
         <button
           type="button"
@@ -434,6 +537,53 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
           </button>
 
           {recommendedAgeWarning && <p className="profile-warning">{recommendedAgeWarning}</p>}
+        </article>
+      )}
+
+      {activeSection === 'nutrition' && (
+        <article className="profile-section-card profile-section-card-personal profile-section-card-nutrition">
+          <div className="profile-biometric-grid profile-biometric-grid-editable profile-biometric-grid-compact">
+            <div className="profile-biometric-item profile-biometric-box profile-biometric-box-nutrition">
+              <label className="profile-biometric-label"><Flame size={16} /> Meta calórica diaria</label>
+              <div className="profile-biometric-input-wrap">
+                <input className="login-input" type="number" min={1000} max={6000} step={10} value={dailyCaloriesInput} onChange={(e) => setDailyCaloriesInput(e.target.value)} />
+                <span className="profile-biometric-unit">kcal</span>
+              </div>
+            </div>
+
+            <div className="profile-biometric-item profile-biometric-box profile-biometric-box-nutrition">
+              <label className="profile-biometric-label"><Target size={16} /> Carbohidratos</label>
+              <div className="profile-biometric-input-wrap">
+                <input className="login-input" type="number" min={1} max={99} step={0.1} value={carbsPercentInput} onChange={(e) => setCarbsPercentInput(e.target.value)} />
+                <span className="profile-biometric-unit">%</span>
+              </div>
+            </div>
+
+            <div className="profile-biometric-item profile-biometric-box profile-biometric-box-nutrition">
+              <label className="profile-biometric-label"><Target size={16} /> Proteínas</label>
+              <div className="profile-biometric-input-wrap">
+                <input className="login-input" type="number" min={1} max={99} step={0.1} value={proteinPercentInput} onChange={(e) => setProteinPercentInput(e.target.value)} />
+                <span className="profile-biometric-unit">%</span>
+              </div>
+            </div>
+
+            <div className="profile-biometric-item profile-biometric-box profile-biometric-box-nutrition">
+              <label className="profile-biometric-label"><Target size={16} /> Grasas</label>
+              <div className="profile-biometric-input-wrap">
+                <input className="login-input" type="number" min={1} max={99} step={0.1} value={fatPercentInput} onChange={(e) => setFatPercentInput(e.target.value)} />
+                <span className="profile-biometric-unit">%</span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="login-button profile-save-button"
+            onClick={handleSaveNutritionTargets}
+            disabled={isSavingNutrition || !nutritionTargetsChanged}
+          >
+            <Save size={16} /> {isSavingNutrition ? 'Guardando metas...' : nutritionTargetsChanged ? 'Guardar metas nutricionales' : 'Sin cambios para guardar'}
+          </button>
         </article>
       )}
 

@@ -31,14 +31,45 @@ Este documento establece las pautas de desarrollo frontend para NovaFitness basa
 frontend/src/
 ├── components/
 │   ├── pages/           # Route-level components (Login.tsx, Register.tsx)
-│   └── UI/              # Reusable UI components (Modal.tsx)
-├── contexts/            # React Context providers (AuthContext.tsx)
+│   ├── UI/              # Reusable UI components (Modal.tsx)
+│   ├── DashboardHeader.tsx    # Fixed header with navigation & profile
+│   ├── NutritionModule.tsx    # Meals tab with carousel & AI input
+│   └── ...other components
+├── contexts/            # React Context providers (AuthContext.tsx, ToastContext.tsx)
+├── hooks/               # Custom React hooks (usePWAUpdate.ts)
 ├── pages/               # Page components (Dashboard.tsx, Login.tsx, Register.tsx)
 ├── services/            # API services (api.ts)
-├── styles/              # Global styles (globals.css)
+├── styles/              # Global styles (globals.css, component-specific styles)
 ├── App.tsx              # Main application component
-└── main.tsx             # Application entry point
+└── main.tsx             # Application entry point with PWA registration
 ```
+
+### Latest Components & Hooks (February 2026)
+
+#### 🎯 **DashboardHeader.tsx**
+- Fixed header with app branding, dynamic section titles
+- Profile button with state indicator
+- Logout button (triggers logout confirmation modal)
+- Styled with gradient background and pill-shaped buttons
+
+#### 🍽️ **NutritionModule.tsx** (Updated)
+- Internal meal carousel using `translate3d` for GPU acceleration
+- Touch swipe handlers optimized for performance
+- Meal items with refined glassmorphic shadows
+- AI voice parser integration
+
+#### 🪝 **usePWAUpdate.ts** (New)
+- Custom hook for PWA update detection
+- Listens to service worker `onNeedRefresh` event
+- Shows persistent toast notification: "¡Nueva versión disponible!"
+- Auto-reloads page when user interacts with toast
+- Integrated into `AppContent` component in App.tsx
+
+#### 🌐 **PWA Service Worker Integration**
+- Automatic SW registration via `virtual:pwa-register` module
+- Manifest generation with metadata (192x512 icons, standalone mode)
+- Workbox precaching with navigateFallbackDenylist for /api routes
+- Periodic update checks (hourly by default)
 
 ### File Naming Conventions
 ```typescript
@@ -46,10 +77,12 @@ frontend/src/
 Login.tsx
 AuthContext.tsx
 Modal.tsx
+DashboardHeader.tsx
 
 // ✅ camelCase for utilities and services
 api.ts
 authService.ts
+usePWAUpdate.ts
 
 // ✅ kebab-case for CSS files
 globals.css

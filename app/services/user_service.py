@@ -401,3 +401,35 @@ class UserService:
         except Exception as e:
             self.db.rollback()
             raise e
+
+    def update_user_nutrition_targets(
+        self,
+        user: User,
+        *,
+        custom_target_calories: Optional[float],
+        carbs_target_percent: float,
+        protein_target_percent: float,
+        fat_target_percent: float,
+    ) -> User:
+        """Update user's editable nutrition targets and recompute macro grams."""
+        percentages_sum = carbs_target_percent + protein_target_percent + fat_target_percent
+        if abs(percentages_sum - 100.0) > 0.2:
+            raise ValueError("Los porcentajes de macronutrientes deben sumar 100%")
+
+        if min(carbs_target_percent, protein_target_percent, fat_target_percent) <= 0:
+            raise ValueError("Todos los porcentajes de macronutrientes deben ser mayores a 0")
+
+        if custom_target_calories is not None and custom_target_calories <= 0:
+            raise ValueError("La meta calórica diaria debe ser mayor a 0")
+
+        user.custom_target_calories = custom_target_calories
+        user.carbs_target_percent = carbs_target_percent
+        user.protein_target_percent = protein_target_percent
+        user.fat_target_percent = fat_target_percent
+
+        # Recalculate stored gram targets using latest objective/biometrics + custom overrides.
+        BiometricService.calculate_and_store_objective_targets(user)
+
+        self.db.commit()
+        self.db.refresh(user)
+        return user

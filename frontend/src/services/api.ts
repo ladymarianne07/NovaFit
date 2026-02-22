@@ -55,6 +55,17 @@ export interface User {
   protein_target_g?: number
   fat_target_g?: number
   carbs_target_g?: number
+  custom_target_calories?: number
+  carbs_target_percent?: number
+  protein_target_percent?: number
+  fat_target_percent?: number
+}
+
+export interface NutritionTargetsUpdateRequest {
+  custom_target_calories: number
+  carbs_target_percent: number
+  protein_target_percent: number
+  fat_target_percent: number
 }
 
 export interface LoginRequest {
@@ -333,6 +344,11 @@ export const authAPI = {
       objective,
       aggressiveness_level
     })
+    return response.data
+  },
+
+  updateNutritionTargets: async (payload: NutritionTargetsUpdateRequest): Promise<User> => {
+    const response = await api.put('/users/me/nutrition-targets', payload)
     return response.data
   },
 }

@@ -205,6 +205,10 @@ class UserResponse(UserBase):
     protein_target_g: Optional[float] = Field(None, description="Daily protein target in grams")
     fat_target_g: Optional[float] = Field(None, description="Daily fat target in grams")
     carbs_target_g: Optional[float] = Field(None, description="Daily carbs target in grams")
+    custom_target_calories: Optional[float] = Field(None, description="Manual daily calories goal")
+    carbs_target_percent: Optional[float] = Field(None, description="Target calories percentage from carbs")
+    protein_target_percent: Optional[float] = Field(None, description="Target calories percentage from protein")
+    fat_target_percent: Optional[float] = Field(None, description="Target calories percentage from fat")
     
     model_config = {"from_attributes": True}
 

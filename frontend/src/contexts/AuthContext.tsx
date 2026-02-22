@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { User, authAPI, LoginRequest, RegisterRequest, BiometricData, FitnessObjective } from '../services/api'
+import { User, authAPI, LoginRequest, RegisterRequest, BiometricData, FitnessObjective, NutritionTargetsUpdateRequest } from '../services/api'
 
 interface AuthContextType {
   user: User | null
@@ -9,6 +9,7 @@ interface AuthContextType {
   logout: () => void
   updateBiometrics: (biometrics: BiometricData) => Promise<void>
   updateObjective: (objective: FitnessObjective, aggressivenessLevel: number) => Promise<void>
+  updateNutritionTargets: (payload: NutritionTargetsUpdateRequest) => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -94,6 +95,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const updateNutritionTargets = async (payload: NutritionTargetsUpdateRequest): Promise<void> => {
+    try {
+      const updatedUser = await authAPI.updateNutritionTargets(payload)
+      setUser(updatedUser)
+    } catch (error) {
+      throw error
+    }
+  }
+
   const refreshUser = async (): Promise<void> => {
     try {
       const userData = await authAPI.getCurrentUser()
@@ -111,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     updateBiometrics,
     updateObjective,
+    updateNutritionTargets,
     refreshUser,
   }
 

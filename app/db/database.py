@@ -17,6 +17,10 @@ REQUIRED_USER_COLUMNS: dict[str, str] = {
     "protein_target_g": "REAL",
     "fat_target_g": "REAL",
     "carbs_target_g": "REAL",
+    "custom_target_calories": "REAL",
+    "carbs_target_percent": "REAL",
+    "protein_target_percent": "REAL",
+    "fat_target_percent": "REAL",
 }
 
 

@@ -66,11 +66,32 @@ class AIParserError(Exception):
     """Raised when Gemini parser fails or returns invalid response."""
 
 
+def _normalize_model_name(model_name: str) -> str:
+    """Normalize model names from env/config to Gemini endpoint-safe format."""
+    normalized = (model_name or "").strip().strip("/")
+    if not normalized:
+        return ""
+
+    if normalized.lower().startswith("models/"):
+        normalized = normalized[len("models/") :]
+
+    if ":" in normalized:
+        normalized = normalized.split(":", 1)[0]
+
+    return normalized.lower()
+
+
 def _build_model_candidates(primary_model: str) -> list[str]:
-    candidates: list[str] = [primary_model]
+    candidates: list[str] = []
+
+    normalized_primary = _normalize_model_name(primary_model)
+    if normalized_primary:
+        candidates.append(normalized_primary)
+
     for fallback_model in FALLBACK_GEMINI_MODELS:
-        if fallback_model not in candidates:
-            candidates.append(fallback_model)
+        normalized_fallback = _normalize_model_name(fallback_model)
+        if normalized_fallback and normalized_fallback not in candidates:
+            candidates.append(normalized_fallback)
     return candidates
 
 
@@ -83,6 +104,17 @@ def _is_model_not_found_response(status_code: int | None, response_text: str) ->
         "not found" in lowered
         or "not supported for generatecontent" in lowered
         or "call listmodels" in lowered
+    )
+
+
+def _is_invalid_model_format_response(status_code: int | None, response_text: str) -> bool:
+    if status_code != 400:
+        return False
+
+    lowered = (response_text or "").lower()
+    return (
+        "unexpected model name format" in lowered
+        or "generatecontentrequest.model" in lowered
     )
 
 
@@ -174,7 +206,8 @@ def parse_food_with_gemini(text: str) -> Any:
         },
     }
 
-    model_candidates = _build_model_candidates(settings.GEMINI_MODEL)
+    configured_model = _normalize_model_name(settings.GEMINI_MODEL)
+    model_candidates = _build_model_candidates(configured_model)
     response: httpx.Response | None = None
     model_not_found_failures = 0
 
@@ -187,10 +220,10 @@ def parse_food_with_gemini(text: str) -> Any:
                 json=payload,
             )
             response.raise_for_status()
-            if model_name != settings.GEMINI_MODEL:
+            if model_name != configured_model:
                 logger.warning(
                     "Gemini fallback model used: configured=%s selected=%s",
-                    settings.GEMINI_MODEL,
+                    configured_model,
                     model_name,
                 )
             break
@@ -216,7 +249,7 @@ def parse_food_with_gemini(text: str) -> Any:
                 )
                 raise AIParserError("gemini_quota_exceeded") from exc
 
-            if _is_model_not_found_response(status_code, response_preview):
+            if _is_model_not_found_response(status_code, response_preview) or _is_invalid_model_format_response(status_code, response_preview):
                 model_not_found_failures += 1
                 logger.warning(
                     "Gemini model unavailable: %s (URL: %s, key=%s)",

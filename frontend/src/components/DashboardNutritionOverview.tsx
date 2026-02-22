@@ -6,6 +6,11 @@ interface DashboardNutritionOverviewProps {
   currentCalories: number
   targetCalories: number
   macroData: MacronutrientData
+  macroTargetPercentages?: {
+    carbs: number
+    protein: number
+    fat: number
+  }
   className?: string
 }
 
@@ -13,9 +18,18 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
   currentCalories,
   targetCalories,
   macroData,
+  macroTargetPercentages,
   className = ''
 }) => {
   const caloriesPercentage = Math.min((currentCalories / targetCalories) * 100, 100)
+
+  const derivedTargetPercentages = {
+    carbs: targetCalories > 0 ? (macroData.carbs_target * 4 / targetCalories) * 100 : 0,
+    protein: targetCalories > 0 ? (macroData.protein_target * 4 / targetCalories) * 100 : 0,
+    fat: targetCalories > 0 ? (macroData.fat_target * 9 / targetCalories) * 100 : 0,
+  }
+
+  const targetPercentages = macroTargetPercentages || derivedTargetPercentages
 
   return (
     <section className={`dashboard-overview-card ${className}`.trim()} aria-label="Resumen nutricional">
@@ -47,7 +61,7 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
           </div>
           <p className="dashboard-overview-macro-name">Carbohidratos</p>
           <p className="dashboard-overview-macro-value">{Math.round(macroData.carbs)} g</p>
-          <p className="dashboard-overview-macro-percentage">{Math.round(macroData.carbs_percentage)}%</p>
+          <p className="dashboard-overview-macro-percentage">Meta {Math.round(targetPercentages.carbs)}% · Progreso {Math.round(macroData.carbs_percentage)}%</p>
         </article>
 
         <article className="dashboard-overview-macro protein">
@@ -56,7 +70,7 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
           </div>
           <p className="dashboard-overview-macro-name">Proteínas</p>
           <p className="dashboard-overview-macro-value">{Math.round(macroData.protein)} g</p>
-          <p className="dashboard-overview-macro-percentage">{Math.round(macroData.protein_percentage)}%</p>
+          <p className="dashboard-overview-macro-percentage">Meta {Math.round(targetPercentages.protein)}% · Progreso {Math.round(macroData.protein_percentage)}%</p>
         </article>
 
         <article className="dashboard-overview-macro fat">
@@ -65,7 +79,7 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
           </div>
           <p className="dashboard-overview-macro-name">Grasas</p>
           <p className="dashboard-overview-macro-value">{Math.round(macroData.fat)} g</p>
-          <p className="dashboard-overview-macro-percentage">{Math.round(macroData.fat_percentage)}%</p>
+          <p className="dashboard-overview-macro-percentage">Meta {Math.round(targetPercentages.fat)}% · Progreso {Math.round(macroData.fat_percentage)}%</p>
         </article>
       </div>
     </section>

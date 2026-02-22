@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ToastProvider } from './contexts/ToastContext'
+import { usePWAUpdate } from './hooks/usePWAUpdate'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -45,42 +46,51 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !user ? <>{children}</> : <Navigate to="/dashboard" />
 }
 
+function AppContent() {
+  // Initialize PWA update listener
+  usePWAUpdate()
+
+  return (
+    <Router>
+      <div className="min-h-screen">
+        <Routes>
+          <Route 
+            path="/login" 
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/register" 
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </div>
+    </Router>
+  )
+}
+
 function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <ToastProvider>
-          <Router>
-            <div className="min-h-screen">
-              <Routes>
-                <Route 
-                  path="/login" 
-                  element={
-                    <PublicRoute>
-                      <Login />
-                    </PublicRoute>
-                  } 
-                />
-                <Route 
-                  path="/register" 
-                  element={
-                    <PublicRoute>
-                      <Register />
-                    </PublicRoute>
-                  } 
-                />
-                <Route 
-                  path="/dashboard" 
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </div>
-          </Router>
+          <AppContent />
         </ToastProvider>
       </AuthProvider>
     </ErrorBoundary>

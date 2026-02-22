@@ -1,16 +1,14 @@
 import React from 'react'
-import { Home, Utensils, Dumbbell, TrendingUp, LogOut, UserRound } from 'lucide-react'
+import { Home, Utensils, Dumbbell, TrendingUp } from 'lucide-react'
 
 interface BottomNavigationProps {
   activeTab?: string
   onTabChange?: (tab: string) => void
-  onLogout?: () => void
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
   activeTab = 'dashboard',
-  onTabChange,
-  onLogout
+  onTabChange
 }) => {
   const navigationItems = [
     {
@@ -18,12 +16,6 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
       label: 'Home',
       icon: Home,
       onClick: () => onTabChange?.('dashboard')
-    },
-    {
-      id: 'profile',
-      label: 'Perfil',
-      icon: UserRound,
-      onClick: () => onTabChange?.('profile')
     },
     {
       id: 'meals',
@@ -42,12 +34,6 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
       label: 'Progreso',
       icon: TrendingUp,
       onClick: () => onTabChange?.('progress')
-    },
-    {
-      id: 'logout',
-      label: 'Salir',
-      icon: LogOut,
-      onClick: onLogout
     }
   ]
 

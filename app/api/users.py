@@ -34,6 +34,18 @@ class ObjectiveUpdate(BaseModel):
     )
 
 
+class NutritionTargetsUpdate(BaseModel):
+    """Request model for custom nutrition targets editable from profile."""
+    custom_target_calories: float = Field(
+        ...,
+        gt=0,
+        description="Custom daily calories target"
+    )
+    carbs_target_percent: float = Field(..., gt=0, lt=100, description="Carbs percent of calories")
+    protein_target_percent: float = Field(..., gt=0, lt=100, description="Protein percent of calories")
+    fat_target_percent: float = Field(..., gt=0, lt=100, description="Fat percent of calories")
+
+
 router = APIRouter(prefix="/users", tags=["users"])
 
 
@@ -179,6 +191,42 @@ async def update_user_objective(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to update objective: {str(e)}"
+        )
+
+
+@router.put("/me/nutrition-targets", response_model=UserResponse)
+async def update_user_nutrition_targets(
+    nutrition_targets: NutritionTargetsUpdate,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Update custom daily calories and macro percentages for the current user."""
+    try:
+        total = (
+            nutrition_targets.carbs_target_percent
+            + nutrition_targets.protein_target_percent
+            + nutrition_targets.fat_target_percent
+        )
+
+        if abs(total - 100.0) > 0.2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La suma de porcentajes de macros debe ser 100%"
+            )
+
+        updated_user = user_service.update_user_nutrition_targets(
+            current_user,
+            custom_target_calories=nutrition_targets.custom_target_calories,
+            carbs_target_percent=nutrition_targets.carbs_target_percent,
+            protein_target_percent=nutrition_targets.protein_target_percent,
+            fat_target_percent=nutrition_targets.fat_target_percent,
+        )
+        return updated_user
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
 
 

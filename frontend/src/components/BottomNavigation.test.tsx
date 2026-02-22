@@ -4,7 +4,6 @@ import BottomNavigation from './BottomNavigation'
 
 describe('BottomNavigation', () => {
   const mockOnTabChange = jest.fn()
-  const mockOnLogout = jest.fn()
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -13,39 +12,34 @@ describe('BottomNavigation', () => {
   it('renders all navigation items', () => {
     render(
       <BottomNavigation
-        activeTab="profile"
+        activeTab="dashboard"
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
     expect(screen.getByText('Home')).toBeInTheDocument()
-    expect(screen.getByText('Perfil')).toBeInTheDocument()
     expect(screen.getByText('Comidas')).toBeInTheDocument()
     expect(screen.getByText('Entreno')).toBeInTheDocument()
     expect(screen.getByText('Progreso')).toBeInTheDocument()
-    expect(screen.getByText('Salir')).toBeInTheDocument()
   })
 
   it('shows active tab with correct styling', () => {
     render(
       <BottomNavigation
-        activeTab="profile"
+        activeTab="training"
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
-    const profileButton = screen.getByRole('button', { name: /perfil/i })
-    expect(profileButton).toHaveClass('active')
+    const trainingButton = screen.getByRole('button', { name: /entreno/i })
+    expect(trainingButton).toHaveClass('active')
   })
 
   it('calls onTabChange when navigation item is clicked', () => {
     render(
       <BottomNavigation
-        activeTab="profile"
+        activeTab="dashboard"
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
@@ -55,26 +49,10 @@ describe('BottomNavigation', () => {
     expect(mockOnTabChange).toHaveBeenCalledWith('meals')
   })
 
-  it('calls onLogout when logout button is clicked', () => {
-    render(
-      <BottomNavigation
-        activeTab="profile"
-        onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
-      />
-    )
-
-    const logoutButton = screen.getByRole('button', { name: /salir/i })
-    fireEvent.click(logoutButton)
-
-    expect(mockOnLogout).toHaveBeenCalled()
-  })
-
   it('renders with default activeTab when not provided', () => {
     render(
       <BottomNavigation
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
@@ -96,19 +74,16 @@ describe('BottomNavigation', () => {
   it('displays correct icons for each navigation item', () => {
     render(
       <BottomNavigation
-        activeTab="profile"
+        activeTab="dashboard"
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
     // Check that buttons render (icons are inside buttons)
     expect(screen.getByRole('button', { name: /home/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /perfil/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /comidas/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /entreno/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /progreso/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /salir/i })).toBeInTheDocument()
   })
 
   it('applies correct CSS classes', () => {
@@ -116,7 +91,6 @@ describe('BottomNavigation', () => {
       <BottomNavigation
         activeTab="progress"
         onTabChange={mockOnTabChange}
-        onLogout={mockOnLogout}
       />
     )
 
