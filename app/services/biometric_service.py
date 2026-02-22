@@ -160,8 +160,8 @@ class BiometricService:
         from ..db.models import User  # Import here to avoid circular import
         
         # Get current values or use updated values
-        weight = biometric_updates.get('weight', current_user.weight)
-        height = biometric_updates.get('height', current_user.height)
+        weight = biometric_updates.get('weight_kg', current_user.weight_kg)
+        height = biometric_updates.get('height_cm', current_user.height_cm)
         age = biometric_updates.get('age', current_user.age)
         gender_value = biometric_updates.get('gender', current_user.gender)
         activity_level_value = biometric_updates.get('activity_level', current_user.activity_level)
@@ -233,8 +233,8 @@ class BiometricService:
         """
         # Check if user has complete biometric data
         if not cls.has_complete_biometric_data(
-            weight=user_instance.weight,
-            height=user_instance.height,
+            weight=user_instance.weight_kg,
+            height=user_instance.height_cm,
             age=user_instance.age,
             gender=Gender(user_instance.gender) if user_instance.gender else None,
             activity_level=ActivityLevel(user_instance.activity_level) if user_instance.activity_level else None
@@ -246,8 +246,8 @@ class BiometricService:
         activity_level = ActivityLevel(user_instance.activity_level)
         
         return cls.calculate_user_metrics(
-            weight=user_instance.weight,
-            height=user_instance.height,
+            weight=user_instance.weight_kg,
+            height=user_instance.height_cm,
             age=user_instance.age,
             gender=gender,
             activity_level=activity_level
@@ -421,7 +421,7 @@ class BiometricService:
             Dictionary with all calculated targets
         """
         # Ensure user has complete data
-        if not user_instance.daily_caloric_expenditure or not user_instance.weight:
+        if not user_instance.daily_caloric_expenditure or not user_instance.weight_kg:
             raise BiometricValidationError(
                 {"objective": "User must have complete biometric data (TDEE and weight)"}
             )
@@ -429,7 +429,7 @@ class BiometricService:
         # Calculate objective targets baseline
         targets = cls.calculate_objective_targets(
             tdee=user_instance.daily_caloric_expenditure,
-            weight_kg=user_instance.weight,
+            weight_kg=user_instance.weight_kg,
             objective=user_instance.objective,
             aggressiveness_level=user_instance.aggressiveness_level
         )
@@ -494,7 +494,7 @@ class BiometricService:
         objective = getattr(user_instance, 'objective', None)
         fat_percent = cls.get_fat_percent_by_objective(objective)
         protein_factor = cls.get_protein_factor_by_objective(objective)
-        protein_g = round(float(user_instance.weight) * protein_factor)
+        protein_g = round(float(user_instance.weight_kg) * protein_factor)
         protein_kcal = protein_g * 4
         target_calories = cls._safe_float(getattr(user_instance, 'target_calories', None))
         if target_calories <= 0:

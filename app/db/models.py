@@ -24,12 +24,12 @@ class User(Base):
     # Biometric data for caloric calculations (required for full registration)
     age = Column(Integer, nullable=False)
     gender = Column(String(10), nullable=False)  # 'male' or 'female'
-    weight = Column(Float, nullable=False)  # in kg
-    height = Column(Float, nullable=False)  # in cm
+    weight_kg = Column(Float, nullable=False)  # in kg
+    height_cm = Column(Float, nullable=False)  # in cm
     activity_level = Column(Float, nullable=False)  # activity factor (1.20-1.80)
     
     # Calculated values (automatically computed when biometric data changes)
-    bmr = Column(Float, nullable=False)  # Basal Metabolic Rate
+    bmr_bpm = Column(Float, nullable=False)  # Basal Metabolic Rate
     daily_caloric_expenditure = Column(Float, nullable=False)  # BMR * activity_level (TDEE)
     
     # Fitness objective and personalized targets

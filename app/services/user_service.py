@@ -93,10 +93,10 @@ class UserService:
             last_name=user_data.last_name,
             age=user_data.age,
             gender=user_data.gender.value if user_data.gender else None,
-            weight=user_data.weight,
-            height=user_data.height,
+            weight_kg=user_data.weight,
+            height_cm=user_data.height,
             activity_level=user_data.activity_level.value if user_data.activity_level else None,
-            bmr=bmr,
+            bmr_bpm=bmr,
             daily_caloric_expenditure=daily_caloric_expenditure,
             objective=user_data.objective.value if user_data.objective else None,
             aggressiveness_level=user_data.aggressiveness_level
@@ -235,18 +235,18 @@ class UserService:
         if biometric_data.gender is not None:
             updates['gender'] = biometric_data.gender.value
         if biometric_data.weight is not None:
-            updates['weight'] = biometric_data.weight
+            updates['weight_kg'] = biometric_data.weight
         if biometric_data.height is not None:
-            updates['height'] = biometric_data.height
+            updates['height_cm'] = biometric_data.height
         if biometric_data.activity_level is not None:
             updates['activity_level'] = biometric_data.activity_level.value
         
         # If any biometric field is being updated, recalculate metrics
         if updates:
             # Capture weight change as event if weight is being updated
-            if "weight" in updates and updates["weight"] is not None:
-                old_weight = user.weight
-                new_weight = updates["weight"]
+            if "weight_kg" in updates and updates["weight_kg"] is not None:
+                old_weight = user.weight_kg
+                new_weight = updates["weight_kg"]
                 if old_weight != new_weight:
                     weight_event = Event(
                         user_id=user.id,
@@ -273,7 +273,7 @@ class UserService:
                 setattr(user, field, value)
             
             # Update calculated values
-            user.bmr = new_bmr
+            user.bmr_bpm = new_bmr
             user.daily_caloric_expenditure = new_daily_expenditure
 
             # Keep objective targets in sync when biometric values (and therefore TDEE) change
@@ -298,7 +298,7 @@ class UserService:
             Updated user instance
         """
         # Separate biometric fields from profile fields
-        biometric_fields = {'age', 'gender', 'weight', 'height', 'activity_level'}
+        biometric_fields = {'age', 'gender', 'weight_kg', 'height_cm', 'activity_level'}
         biometric_updates = {k: v for k, v in updates.items() if k in biometric_fields and v is not None}
         profile_updates = {k: v for k, v in updates.items() if k not in biometric_fields and v is not None}
         
@@ -310,9 +310,9 @@ class UserService:
         # Update biometric fields with recalculation if any biometric data changed
         if biometric_updates:
             # Capture weight change as event if weight is being updated
-            if "weight" in biometric_updates and biometric_updates["weight"] is not None:
-                old_weight = user.weight
-                new_weight = biometric_updates["weight"]
+            if "weight_kg" in biometric_updates and biometric_updates["weight_kg"] is not None:
+                old_weight = user.weight_kg
+                new_weight = biometric_updates["weight_kg"]
                 if old_weight != new_weight:
                     weight_event = Event(
                         user_id=user.id,
@@ -344,7 +344,7 @@ class UserService:
                     setattr(user, field, value)
             
             # Update calculated values
-            user.bmr = new_bmr
+            user.bmr_bpm = new_bmr
             user.daily_caloric_expenditure = new_daily_expenditure
 
             # Keep objective targets in sync when biometric values (and therefore TDEE) change
@@ -357,7 +357,7 @@ class UserService:
     
     def update_calculated_metrics(self, user: User, bmr: float, daily_expenditure: float) -> User:
         """Update user's calculated BMR and daily expenditure metrics"""
-        user.bmr = bmr
+        user.bmr_bpm = bmr
         user.daily_caloric_expenditure = daily_expenditure
 
         # Keep objective targets in sync when manual recalculation is triggered
