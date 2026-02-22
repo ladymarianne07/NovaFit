@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .config import settings
-from .api import auth, users, events, nutrition
+from .api import auth, users, events, nutrition, workout
 from .routers import food
 from .db.database import create_tables, get_missing_user_columns
 from .constants import AppConstants, StatusCodes
@@ -241,6 +241,7 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(users.router)
     app.include_router(events.router)
     app.include_router(nutrition.router)
+    app.include_router(workout.router)
     app.include_router(food.router)
     app.include_router(food.router, prefix="/api")
     

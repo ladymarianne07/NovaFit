@@ -349,6 +349,7 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
       })
       setResult(calculated)
       await loadHistory()
+      window.dispatchEvent(new CustomEvent('skinfolds:updated'))
       showSuccess('Cálculo completado', `${calculated.method}`)
     } catch (err: any) {
       const detail = err?.response?.data?.detail || 'No fue posible calcular. Verifica tus datos.'

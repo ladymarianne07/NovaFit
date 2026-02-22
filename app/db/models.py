@@ -63,6 +63,18 @@ class User(Base):
     def __repr__(self):
         return f"<User(email='{self.email}')>"
 
+    @property
+    def weight(self) -> float | None:
+        return self.weight_kg
+
+    @property
+    def height(self) -> float | None:
+        return self.height_cm
+
+    @property
+    def bmr(self) -> float | None:
+        return self.bmr_bpm
+
 
 class Event(Base):
     """Event/Activity model for timeline tracking (append-only design)"""

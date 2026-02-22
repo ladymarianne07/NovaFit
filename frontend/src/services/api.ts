@@ -201,6 +201,61 @@ export interface SuggestionData {
   created_at: string
 }
 
+// Workout Types
+export interface WorkoutSessionBlockCreate {
+  activity: string
+  duration_minutes: number
+  intensity?: string
+}
+
+export interface WorkoutSessionCreateRequest {
+  session_date: string
+  source?: 'ai' | 'manual' | 'wearable'
+  status?: 'draft' | 'final' | 'discarded'
+  raw_input?: string
+  ai_output?: Record<string, unknown>
+  weight_kg?: number
+  blocks: WorkoutSessionBlockCreate[]
+}
+
+export interface WorkoutSessionBlockResponse {
+  id: number
+  block_order: number
+  activity_id: number
+  duration_minutes: number
+  intensity_level?: string | null
+  intensity_raw?: string | null
+  weight_kg_used?: number | null
+  met_used_min?: number | null
+  met_used_max?: number | null
+  correction_factor: number
+  kcal_min?: number | null
+  kcal_max?: number | null
+  kcal_est?: number | null
+}
+
+export interface WorkoutSessionResponse {
+  id: number
+  user_id: number
+  session_date: string
+  source: string
+  status: string
+  total_kcal_min?: number | null
+  total_kcal_max?: number | null
+  total_kcal_est?: number | null
+  blocks: WorkoutSessionBlockResponse[]
+}
+
+export interface WorkoutDailyEnergyResponse {
+  user_id: number
+  log_date: string
+  exercise_kcal_min: number
+  exercise_kcal_max: number
+  exercise_kcal_est: number
+  intake_kcal: number
+  net_kcal_est: number
+}
+
 // Progress Types
 export interface ProgressMetrics {
   peso_inicial_kg?: number
@@ -391,6 +446,29 @@ export const foodAPI = {
 
   parseAndLog: async (payload: FoodParseRequest): Promise<FoodParseLogResponse> => {
     const response = await api.post('/food/parse-and-log', payload)
+    return response.data
+  },
+}
+
+export const workoutAPI = {
+  createSession: async (payload: WorkoutSessionCreateRequest): Promise<WorkoutSessionResponse> => {
+    const response = await api.post('/v1/sessions', payload)
+    return response.data
+  },
+
+  listSessions: async (sessionDate?: string): Promise<WorkoutSessionResponse[]> => {
+    const params = sessionDate ? { session_date: sessionDate } : {}
+    const response = await api.get('/v1/sessions', { params })
+    return response.data
+  },
+
+  deleteSession: async (sessionId: number): Promise<{ status: string }> => {
+    const response = await api.delete(`/v1/sessions/${sessionId}`)
+    return response.data
+  },
+
+  getDailyEnergy: async (targetDate: string): Promise<WorkoutDailyEnergyResponse> => {
+    const response = await api.get(`/v1/days/${targetDate}/energy`)
     return response.data
   },
 }

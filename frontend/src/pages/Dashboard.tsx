@@ -5,11 +5,20 @@ import BottomNavigation from '../components/BottomNavigation'
 import DashboardHeader from '../components/DashboardHeader'
 import SuggestionCard from '../components/SuggestionCard'
 import NutritionModule from '../components/NutritionModule'
+import WorkoutModule from '../components/WorkoutModule'
 import ProgressModule from '../components/ProgressModule'
 import ProfileBiometricsPanel from '../components/ProfileBiometricsPanel'
 import DashboardNutritionOverview from '../components/DashboardNutritionOverview'
 import DashboardBodyComposition from '../components/DashboardBodyComposition'
-import { nutritionAPI, MacronutrientData, SuggestionData, SkinfoldCalculationResult, usersAPI } from '../services/api'
+import {
+  nutritionAPI,
+  MacronutrientData,
+  SuggestionData,
+  SkinfoldCalculationResult,
+  usersAPI,
+  workoutAPI,
+  WorkoutDailyEnergyResponse,
+} from '../services/api'
 
 type DashboardTab = 'dashboard' | 'profile' | 'meals' | 'training' | 'progress'
 
@@ -22,6 +31,7 @@ const Dashboard: React.FC = () => {
   const [macroData, setMacroData] = useState<MacronutrientData | null>(null)
   const [suggestion, setSuggestion] = useState<SuggestionData | null>(null)
   const [latestSkinfold, setLatestSkinfold] = useState<SkinfoldCalculationResult | null>(null)
+  const [dailyWorkoutEnergy, setDailyWorkoutEnergy] = useState<WorkoutDailyEnergyResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -30,15 +40,20 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true)
 
-      const [macros, suggestionData, skinfoldHistory] = await Promise.all([
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+      const [macros, suggestionData, skinfoldHistory, workoutEnergy] = await Promise.all([
         nutritionAPI.getMacronutrients(),
         nutritionAPI.getSuggestions(),
-        usersAPI.getSkinfoldHistory(1)
+        usersAPI.getSkinfoldHistory(1),
+        workoutAPI.getDailyEnergy(today).catch(() => null),
       ])
 
       setMacroData(macros)
       setSuggestion(suggestionData)
       setLatestSkinfold(skinfoldHistory[0] || null)
+      setDailyWorkoutEnergy(workoutEnergy)
     } catch (error) {
       console.error('Failed to load nutrition data:', error)
       setMacroData({
@@ -56,6 +71,7 @@ const Dashboard: React.FC = () => {
         calories_percentage: 0
       })
       setLatestSkinfold(null)
+      setDailyWorkoutEnergy(null)
     } finally {
       setLoading(false)
     }
@@ -124,11 +140,21 @@ const Dashboard: React.FC = () => {
     }
 
     window.addEventListener('nutrition:updated', handler)
-    return () => window.removeEventListener('nutrition:updated', handler)
+    window.addEventListener('workout:updated', handler)
+    window.addEventListener('skinfolds:updated', handler)
+    return () => {
+      window.removeEventListener('nutrition:updated', handler)
+      window.removeEventListener('workout:updated', handler)
+      window.removeEventListener('skinfolds:updated', handler)
+    }
   }, [user])
 
   // Calculate current calories (using a mock value for now, could be from daily intake)
   const getCurrentCalories = () => {
+    if (dailyWorkoutEnergy) {
+      return Math.round(dailyWorkoutEnergy.net_kcal_est)
+    }
+
     if (macroData) {
       return Math.round(macroData.total_calories)
     }
@@ -154,6 +180,8 @@ const Dashboard: React.FC = () => {
               currentCalories={getCurrentCalories()}
               targetCalories={getTargetCalories()}
               macroData={macroData}
+              calorieMode={dailyWorkoutEnergy ? 'net' : 'intake'}
+              exerciseCalories={dailyWorkoutEnergy?.exercise_kcal_est ?? 0}
               macroTargetPercentages={{
                 carbs: user?.carbs_target_percent ?? 50,
                 protein: user?.protein_target_percent ?? 25,
@@ -180,14 +208,6 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-suggestion-wrap">
         <SuggestionCard suggestion={suggestion} loading={loading} />
       </div>
-    </section>
-  )
-
-  const renderTrainingPlaceholder = () => (
-    <section className="dashboard-tab-content">
-      <section className="dashboard-placeholder-card dashboard-placeholder-card-plain">
-        <p>Próximamente vamos a sumar el plan de entrenamiento y seguimiento de sesiones.</p>
-      </section>
     </section>
   )
 
@@ -262,7 +282,9 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'training'}>
-                {renderTrainingPlaceholder()}
+                <section className="dashboard-tab-content">
+                  <WorkoutModule className="mb-6" />
+                </section>
               </div>
 
               <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'progress'}>

@@ -64,100 +64,103 @@ const DashboardBodyComposition: React.FC<DashboardBodyCompositionProps> = ({
     }
   }
 
-  if (!latestMeasurement) {
-    return (
-      <section className="dashboard-body-comp-card" aria-label="Composición corporal">
-        <header className="dashboard-body-comp-header">
-          <h3>Composición corporal</h3>
-          <p>Sin medición aún. Cárgala en Perfil → Pliegues cutáneos.</p>
-        </header>
-      </section>
-    )
-  }
+  const hasMeasurement = Boolean(latestMeasurement)
+  const hasWeight = currentWeight !== undefined && currentWeight !== null
 
   return (
     <section className="dashboard-body-comp-card" aria-label="Composición corporal">
       <header className="dashboard-body-comp-header">
         <h3>Composición corporal</h3>
-        <p>Última medición: {new Date(latestMeasurement.measured_at).toLocaleDateString('es-AR')}</p>
+        {hasMeasurement ? (
+          <p>Última medición: {new Date(latestMeasurement!.measured_at).toLocaleDateString('es-AR')}</p>
+        ) : (
+          <p>Sin medición aún. Cárgala en Perfil → Pliegues cutáneos.</p>
+        )}
       </header>
 
       <div className="dashboard-body-comp-stack">
-        {currentWeight !== undefined && currentWeight !== null && (
-          <article className="dashboard-body-comp-item weight">
-            <div className="dashboard-body-comp-icon" aria-hidden="true">
-              <Scale size={14} />
-            </div>
-            <div className="dashboard-body-comp-text">
-              <p className="dashboard-body-comp-label">Peso</p>
-              {isEditingWeight ? (
-                <div className="dashboard-body-comp-weight-editor">
-                  <input
-                    type="number"
-                    min={20}
-                    max={300}
-                    step={0.1}
-                    value={weightInput}
-                    onChange={(event) => setWeightInput(event.target.value)}
-                    className="dashboard-body-comp-weight-input"
-                    aria-label="Actualizar peso en kg"
-                  />
-                  <span className="dashboard-body-comp-unit">kg</span>
-                </div>
-              ) : (
-                <p className="dashboard-body-comp-value">{currentWeight} kg</p>
-              )}
-              {weightError && <p className="dashboard-body-comp-error">{weightError}</p>}
-            </div>
+        <article className="dashboard-body-comp-item weight">
+          <div className="dashboard-body-comp-icon" aria-hidden="true">
+            <Scale size={14} />
+          </div>
+          <div className="dashboard-body-comp-text">
+            <p className="dashboard-body-comp-label">Peso</p>
+            {isEditingWeight ? (
+              <div className="dashboard-body-comp-weight-editor">
+                <input
+                  type="number"
+                  min={20}
+                  max={300}
+                  step={0.1}
+                  value={weightInput}
+                  onChange={(event) => setWeightInput(event.target.value)}
+                  className="dashboard-body-comp-weight-input"
+                  aria-label="Actualizar peso en kg"
+                />
+                <span className="dashboard-body-comp-unit">kg</span>
+              </div>
+            ) : (
+              <p className="dashboard-body-comp-value">{hasWeight ? `${currentWeight} kg` : 'Sin datos'}</p>
+            )}
+            {weightError && <p className="dashboard-body-comp-error">{weightError}</p>}
+          </div>
 
-            <div className="dashboard-body-comp-actions">
-              {!isEditingWeight ? (
-                <button type="button" className="dashboard-body-comp-btn" onClick={handleStartEditWeight}>
-                  Actualizar
+          <div className="dashboard-body-comp-actions">
+            {!isEditingWeight ? (
+              <button
+                type="button"
+                className="dashboard-body-comp-btn"
+                onClick={handleStartEditWeight}
+                disabled={!onWeightUpdate}
+              >
+                Actualizar
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="dashboard-body-comp-btn primary"
+                  onClick={handleSaveWeight}
+                  disabled={isSavingWeight}
+                >
+                  {isSavingWeight ? 'Guardando...' : 'Guardar'}
                 </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="dashboard-body-comp-btn primary"
-                    onClick={handleSaveWeight}
-                    disabled={isSavingWeight}
-                  >
-                    {isSavingWeight ? 'Guardando...' : 'Guardar'}
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard-body-comp-btn ghost"
-                    onClick={handleCancelEditWeight}
-                    disabled={isSavingWeight}
-                  >
-                    Cancelar
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
+                <button
+                  type="button"
+                  className="dashboard-body-comp-btn ghost"
+                  onClick={handleCancelEditWeight}
+                  disabled={isSavingWeight}
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        </article>
+
+        {hasMeasurement && (
+          <>
+            <article className="dashboard-body-comp-item fat">
+              <div className="dashboard-body-comp-icon" aria-hidden="true">
+                <Percent size={14} />
+              </div>
+              <div className="dashboard-body-comp-text">
+                <p className="dashboard-body-comp-label">% Grasa corporal</p>
+                <p className="dashboard-body-comp-value">{latestMeasurement!.body_fat_percent}%</p>
+              </div>
+            </article>
+
+            <article className="dashboard-body-comp-item lean">
+              <div className="dashboard-body-comp-icon" aria-hidden="true">
+                <Bone size={14} />
+              </div>
+              <div className="dashboard-body-comp-text">
+                <p className="dashboard-body-comp-label">Masa magra</p>
+                <p className="dashboard-body-comp-value">{latestMeasurement!.fat_free_mass_percent}%</p>
+              </div>
+            </article>
+          </>
         )}
-
-        <article className="dashboard-body-comp-item fat">
-          <div className="dashboard-body-comp-icon" aria-hidden="true">
-            <Percent size={14} />
-          </div>
-          <div className="dashboard-body-comp-text">
-            <p className="dashboard-body-comp-label">% Grasa corporal</p>
-            <p className="dashboard-body-comp-value">{latestMeasurement.body_fat_percent}%</p>
-          </div>
-        </article>
-
-        <article className="dashboard-body-comp-item lean">
-          <div className="dashboard-body-comp-icon" aria-hidden="true">
-            <Bone size={14} />
-          </div>
-          <div className="dashboard-body-comp-text">
-            <p className="dashboard-body-comp-label">Masa magra</p>
-            <p className="dashboard-body-comp-value">{latestMeasurement.fat_free_mass_percent}%</p>
-          </div>
-        </article>
       </div>
     </section>
   )

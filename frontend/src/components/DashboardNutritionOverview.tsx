@@ -6,6 +6,8 @@ interface DashboardNutritionOverviewProps {
   currentCalories: number
   targetCalories: number
   macroData: MacronutrientData
+  calorieMode?: 'intake' | 'net'
+  exerciseCalories?: number
   macroTargetPercentages?: {
     carbs: number
     protein: number
@@ -18,6 +20,8 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
   currentCalories,
   targetCalories,
   macroData,
+  calorieMode = 'intake',
+  exerciseCalories = 0,
   macroTargetPercentages,
   className = ''
 }) => {
@@ -30,6 +34,7 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
   }
 
   const targetPercentages = macroTargetPercentages || derivedTargetPercentages
+  const calorieLabel = calorieMode === 'net' ? 'Calorías netas' : 'Calorías consumidas'
 
   return (
     <section className={`dashboard-overview-card ${className}`.trim()} aria-label="Resumen nutricional">
@@ -42,11 +47,14 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
           <Flame size={20} />
         </div>
         <div className="dashboard-overview-calories-main">
-          <p className="dashboard-overview-calories-label">Calorías consumidas</p>
+          <p className="dashboard-overview-calories-label">{calorieLabel}</p>
           <p className="dashboard-overview-calories-value">
             {currentCalories.toLocaleString('en-US')} <span>cal</span>
           </p>
           <p className="dashboard-overview-calories-target">de {targetCalories.toLocaleString('en-US')} cal</p>
+          {calorieMode === 'net' && (
+            <p className="dashboard-overview-calories-target">Ejercicio: -{Math.round(exerciseCalories)} cal</p>
+          )}
         </div>
       </div>
 

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..constants import WorkoutConstants
 from ..core.custom_exceptions import (
     WorkoutActivityNotFoundError,
@@ -15,6 +18,7 @@ from ..core.custom_exceptions import (
     WorkoutWeightRequiredError,
 )
 from ..db.models import (
+    DailyNutrition,
     ExerciseActivity,
     ExerciseDailyEnergyLog,
     WorkoutCorrectionFactor,
@@ -80,6 +84,16 @@ class WorkoutService:
                 f"Invalid workout source '{source}'. Valid: {sorted(WorkoutConstants.VALID_SOURCES)}"
             )
         return normalized_source
+
+    @classmethod
+    def validate_session_status(cls, status: str) -> str:
+        """Validate and normalize workout session status."""
+        normalized_status = status.strip().lower()
+        if normalized_status not in WorkoutConstants.VALID_SESSION_STATUS:
+            raise WorkoutValidationError(
+                f"Invalid workout status '{status}'. Valid: {sorted(WorkoutConstants.VALID_SESSION_STATUS)}"
+            )
+        return normalized_status
 
     @classmethod
     def resolve_activity(cls, db: Session, activity_query: str) -> ExerciseActivity:
@@ -258,6 +272,188 @@ class WorkoutService:
         return log
 
     @classmethod
+    def create_session(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        session_date: date,
+        source: str,
+        status: str,
+        blocks_data: list[dict[str, Any]],
+        weight_kg: float | None,
+        raw_input: str | None = None,
+        ai_output: dict[str, Any] | None = None,
+    ) -> WorkoutSession:
+        """Create a workout session with calculated block and session totals."""
+        if not blocks_data:
+            raise WorkoutValidationError("Workout session must include at least one block")
+
+        normalized_source = cls.validate_session_source(source)
+        normalized_status = cls.validate_session_status(status)
+
+        session = WorkoutSession(
+            user_id=user_id,
+            session_date=session_date,
+            source=normalized_source,
+            status=normalized_status,
+            raw_input=raw_input,
+            ai_output=ai_output,
+        )
+
+        session_data = cast(Any, session)
+        session_blocks: list[WorkoutSessionBlock] = []
+
+        for index, block_data in enumerate(blocks_data, start=1):
+            activity_query = str(block_data.get("activity") or block_data.get("activity_key") or "").strip()
+            if not activity_query:
+                raise WorkoutValidationError("Each workout block requires 'activity' or 'activity_key'")
+
+            duration_minutes = int(block_data.get("duration_minutes", 0))
+            activity = cls.resolve_activity(db, activity_query)
+            intensity_raw = cast(str | None, block_data.get("intensity") or block_data.get("intensity_raw"))
+            effective_factor = cls.get_effective_correction_factor(
+                db=db,
+                user_id=user_id,
+                session_date=session_date,
+                activity=activity,
+            )
+
+            metrics = cls.calculate_block_metrics(
+                activity=activity,
+                duration_minutes=duration_minutes,
+                weight_kg=weight_kg,
+                intensity_level=intensity_raw,
+                correction_factor=effective_factor,
+            )
+
+            block = WorkoutSessionBlock(
+                block_order=index,
+                duration_minutes=duration_minutes,
+                activity_id=cast(Any, activity).id,
+            )
+            cls.persist_block_metrics(
+                block,
+                metrics,
+                intensity_raw=intensity_raw,
+                weight_kg=float(weight_kg or 0.0),
+            )
+            session_blocks.append(block)
+
+        session_data.blocks = session_blocks
+        cls.recalculate_session_totals(session)
+
+        db.add(session)
+        db.flush()
+
+        cls.refresh_daily_energy_log(db=db, user_id=user_id, log_date=session_date)
+        db.commit()
+        db.refresh(session)
+        return session
+
+    @classmethod
+    def refresh_daily_energy_log(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        log_date: date,
+    ) -> ExerciseDailyEnergyLog:
+        """Recompute daily energy totals from all sessions for a date."""
+        aggregate = (
+            db.query(
+                func.coalesce(func.sum(WorkoutSession.total_kcal_min), 0.0),
+                func.coalesce(func.sum(WorkoutSession.total_kcal_max), 0.0),
+                func.coalesce(func.sum(WorkoutSession.total_kcal_est), 0.0),
+            )
+            .filter(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.session_date == log_date,
+            )
+            .first()
+        )
+
+        total_min = float(aggregate[0] or 0.0) if aggregate else 0.0
+        total_max = float(aggregate[1] or 0.0) if aggregate else 0.0
+        total_est = float(aggregate[2] or 0.0) if aggregate else 0.0
+        intake_kcal = cls.get_daily_intake_kcal(db=db, user_id=user_id, tracking_date=log_date)
+
+        return cls.upsert_daily_energy_log(
+            db,
+            user_id=user_id,
+            log_date=log_date,
+            exercise_kcal_min=total_min,
+            exercise_kcal_max=total_max,
+            exercise_kcal_est=total_est,
+            intake_kcal=intake_kcal,
+        )
+
+    @classmethod
+    def get_daily_energy(cls, db: Session, *, user_id: int, log_date: date) -> ExerciseDailyEnergyLog:
+        """Get or rebuild daily energy log for a specific date."""
+        return cls.refresh_daily_energy_log(db=db, user_id=user_id, log_date=log_date)
+
+    @classmethod
+    def list_sessions(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        session_date: date | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[WorkoutSession]:
+        """List workout sessions for a user, optionally filtered by date."""
+        query = db.query(WorkoutSession).filter(WorkoutSession.user_id == user_id)
+        if session_date is not None:
+            query = query.filter(WorkoutSession.session_date == session_date)
+
+        return (
+            query.order_by(WorkoutSession.session_date.desc(), WorkoutSession.id.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    @classmethod
+    def delete_session(cls, db: Session, *, user_id: int, session_id: int) -> bool:
+        """Delete a workout session and recalculate daily totals for its date."""
+        session = (
+            db.query(WorkoutSession)
+            .filter(
+                WorkoutSession.id == session_id,
+                WorkoutSession.user_id == user_id,
+            )
+            .first()
+        )
+        if session is None:
+            return False
+
+        session_data = cast(Any, session)
+        log_date = cast(date, getattr(session_data, "session_date"))
+        db.delete(session)
+        db.flush()
+
+        cls.refresh_daily_energy_log(db=db, user_id=user_id, log_date=log_date)
+        db.commit()
+        return True
+
+    @classmethod
+    def get_daily_intake_kcal(cls, db: Session, *, user_id: int, tracking_date: date) -> float:
+        """Resolve daily nutrition intake calories for a local day in app timezone."""
+        start_utc, end_utc = cls._get_utc_day_bounds(tracking_date)
+        value = (
+            db.query(func.coalesce(func.sum(DailyNutrition.total_calories), 0.0))
+            .filter(
+                DailyNutrition.user_id == user_id,
+                DailyNutrition.date >= start_utc,
+                DailyNutrition.date < end_utc,
+            )
+            .scalar()
+        )
+        return round(float(value or 0.0), 2)
+
+    @classmethod
     def persist_block_metrics(
         cls,
         block: WorkoutSessionBlock,
@@ -319,3 +515,19 @@ class WorkoutService:
                 "Duration minutes out of range "
                 f"({WorkoutConstants.MIN_DURATION_MINUTES}-{WorkoutConstants.MAX_DURATION_MINUTES})"
             )
+
+    @classmethod
+    def _get_app_timezone(cls):
+        """Return configured app timezone; fallback to UTC when invalid."""
+        try:
+            return ZoneInfo(settings.APP_TIMEZONE)
+        except ZoneInfoNotFoundError:
+            return timezone.utc
+
+    @classmethod
+    def _get_utc_day_bounds(cls, tracking_date: date) -> tuple[datetime, datetime]:
+        """Compute UTC [start, end) range for a local day in app timezone."""
+        app_tz = cls._get_app_timezone()
+        local_start = datetime.combine(tracking_date, datetime.min.time()).replace(tzinfo=app_tz)
+        local_end = local_start + timedelta(days=1)
+        return local_start.astimezone(timezone.utc), local_end.astimezone(timezone.utc)
