@@ -31,6 +31,10 @@ def _api_key_fingerprint(api_key: str | None) -> str:
 
 
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+FALLBACK_GEMINI_MODELS: tuple[str, ...] = (
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+)
 
 SYSTEM_PROMPT = (
     "You are a strict food parser for a fitness application.\n"
@@ -60,6 +64,26 @@ SYSTEM_PROMPT = (
 
 class AIParserError(Exception):
     """Raised when Gemini parser fails or returns invalid response."""
+
+
+def _build_model_candidates(primary_model: str) -> list[str]:
+    candidates: list[str] = [primary_model]
+    for fallback_model in FALLBACK_GEMINI_MODELS:
+        if fallback_model not in candidates:
+            candidates.append(fallback_model)
+    return candidates
+
+
+def _is_model_not_found_response(status_code: int | None, response_text: str) -> bool:
+    if status_code != 404:
+        return False
+
+    lowered = (response_text or "").lower()
+    return (
+        "not found" in lowered
+        or "not supported for generatecontent" in lowered
+        or "call listmodels" in lowered
+    )
 
 
 def _extract_text_from_gemini_response(data: dict[str, Any]) -> str:
@@ -131,9 +155,6 @@ def parse_food_with_gemini(text: str) -> Any:
     if not settings.GEMINI_API_KEY:
         raise AIParserError("missing_gemini_api_key")
 
-    model_name = settings.GEMINI_MODEL
-    endpoint = f"{GEMINI_API_BASE_URL}/{model_name}:generateContent"
-
     payload: dict[str, Any] = {
         "system_instruction": {
             "parts": [{"text": SYSTEM_PROMPT}],
@@ -153,41 +174,81 @@ def parse_food_with_gemini(text: str) -> Any:
         },
     }
 
-    try:
-        response = _GEMINI_HTTP_CLIENT.post(
-            endpoint,
-            params={"key": settings.GEMINI_API_KEY},
-            json=payload,
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code if exc.response is not None else None
-        sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)
-        response_preview = ""
-        if exc.response is not None:
-            try:
-                response_preview = exc.response.text[:600]
-            except Exception:
-                response_preview = "<unavailable_response_body>"
+    model_candidates = _build_model_candidates(settings.GEMINI_MODEL)
+    response: httpx.Response | None = None
+    model_not_found_failures = 0
 
-        logger.error(
-            "Gemini HTTP status error: %s (URL: %s, key=%s, body=%s)",
-            exc,
-            sanitized_url,
-            _api_key_fingerprint(settings.GEMINI_API_KEY),
-            response_preview,
-        )
-        if status_code == 429:
-            raise AIParserError("gemini_quota_exceeded") from exc
-        raise AIParserError("gemini_request_failed") from exc
-    except httpx.HTTPError as exc:
-        sanitized_url = _sanitize_url_for_logging(str(exc.request.url) if hasattr(exc, 'request') and exc.request else endpoint)
-        logger.error("Gemini request failed: %s (URL: %s)", exc, sanitized_url)
-        logger.error("Full exception details: %s", repr(exc))
-        raise AIParserError("gemini_request_failed") from exc
-    except Exception as exc:
-        logger.error("Unexpected error calling Gemini: %s", type(exc).__name__, exc_info=True)
-        raise AIParserError("gemini_request_failed") from exc
+    for model_name in model_candidates:
+        endpoint = f"{GEMINI_API_BASE_URL}/{model_name}:generateContent"
+        try:
+            response = _GEMINI_HTTP_CLIENT.post(
+                endpoint,
+                params={"key": settings.GEMINI_API_KEY},
+                json=payload,
+            )
+            response.raise_for_status()
+            if model_name != settings.GEMINI_MODEL:
+                logger.warning(
+                    "Gemini fallback model used: configured=%s selected=%s",
+                    settings.GEMINI_MODEL,
+                    model_name,
+                )
+            break
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            response_preview = ""
+            if exc.response is not None:
+                try:
+                    response_preview = exc.response.text[:600]
+                except Exception:
+                    response_preview = "<unavailable_response_body>"
+
+            sanitized_url = _sanitize_url_for_logging(
+                str(exc.request.url) if hasattr(exc, "request") and exc.request else endpoint
+            )
+
+            if status_code == 429:
+                logger.error(
+                    "Gemini quota exceeded (URL: %s, key=%s, body=%s)",
+                    sanitized_url,
+                    _api_key_fingerprint(settings.GEMINI_API_KEY),
+                    response_preview,
+                )
+                raise AIParserError("gemini_quota_exceeded") from exc
+
+            if _is_model_not_found_response(status_code, response_preview):
+                model_not_found_failures += 1
+                logger.warning(
+                    "Gemini model unavailable: %s (URL: %s, key=%s)",
+                    model_name,
+                    sanitized_url,
+                    _api_key_fingerprint(settings.GEMINI_API_KEY),
+                )
+                continue
+
+            logger.error(
+                "Gemini HTTP status error: %s (URL: %s, key=%s, body=%s)",
+                exc,
+                sanitized_url,
+                _api_key_fingerprint(settings.GEMINI_API_KEY),
+                response_preview,
+            )
+            raise AIParserError("gemini_request_failed") from exc
+        except httpx.HTTPError as exc:
+            sanitized_url = _sanitize_url_for_logging(
+                str(exc.request.url) if hasattr(exc, "request") and exc.request else endpoint
+            )
+            logger.error("Gemini request failed: %s (URL: %s)", exc, sanitized_url)
+            logger.error("Full exception details: %s", repr(exc))
+            raise AIParserError("gemini_request_failed") from exc
+        except Exception as exc:
+            logger.error("Unexpected error calling Gemini: %s", type(exc).__name__, exc_info=True)
+            raise AIParserError("gemini_request_failed") from exc
+
+    if response is None:
+        if model_not_found_failures > 0:
+            raise AIParserError("gemini_model_not_found")
+        raise AIParserError("gemini_request_failed")
 
     try:
         data: dict[str, Any] = response.json()

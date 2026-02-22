@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     FATSECRET_CLIENT_ID: Optional[str] = None
     FATSECRET_CLIENT_SECRET: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     
     @classmethod
     def settings_customise_sources(

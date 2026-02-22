@@ -14,9 +14,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="login-container">
         <div className="login-content">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-white text-sm">Loading...</p>
+          <div className="loading-stack text-center">
+            <div className="neon-loader neon-loader--lg" aria-hidden="true"></div>
+            <p className="text-white text-sm">Cargando...</p>
           </div>
         </div>
       </div>
@@ -33,9 +33,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="login-container">
         <div className="login-content">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-            <p className="text-white text-sm">Loading...</p>
+          <div className="loading-stack text-center">
+            <div className="neon-loader neon-loader--lg" aria-hidden="true"></div>
+            <p className="text-white text-sm">Cargando...</p>
           </div>
         </div>
       </div>

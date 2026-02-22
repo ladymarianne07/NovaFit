@@ -49,6 +49,7 @@ class User(Base):
     
     # Relationships
     events = relationship("Event", back_populates="user", cascade="all, delete-orphan")
+    skinfold_measurements = relationship("SkinfoldMeasurement", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(email='{self.email}')>"
@@ -115,6 +116,45 @@ class DailyNutrition(Base):
     
     def __repr__(self):
         return f"<DailyNutrition(user_id={self.user_id}, date={self.date})>"
+
+
+class SkinfoldMeasurement(Base):
+    """Stored skinfold measurements and computed body composition values."""
+    __tablename__ = "skinfold_measurements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    method = Column(String(100), nullable=False)
+    measurement_unit = Column(String(10), nullable=False, default="mm")
+    measured_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    sex = Column(String(10), nullable=False)
+    age_years = Column(Integer, nullable=False)
+    weight_kg = Column(Float, nullable=True)
+
+    chest_mm = Column(Float, nullable=True)
+    midaxillary_mm = Column(Float, nullable=True)
+    triceps_mm = Column(Float, nullable=True)
+    subscapular_mm = Column(Float, nullable=True)
+    abdomen_mm = Column(Float, nullable=True)
+    suprailiac_mm = Column(Float, nullable=True)
+    thigh_mm = Column(Float, nullable=True)
+
+    sum_of_skinfolds_mm = Column(Float, nullable=False)
+    body_density = Column(Float, nullable=False)
+    body_fat_percent = Column(Float, nullable=False)
+    fat_free_mass_percent = Column(Float, nullable=False)
+    fat_mass_kg = Column(Float, nullable=True)
+    lean_mass_kg = Column(Float, nullable=True)
+    warnings = Column(JSON, nullable=False, default=list)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="skinfold_measurements")
+
+    def __repr__(self):
+        return f"<SkinfoldMeasurement(user_id={self.user_id}, method='{self.method}')>"
 
 
 # Database indexes for performance

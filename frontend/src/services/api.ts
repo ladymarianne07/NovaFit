@@ -86,6 +86,41 @@ export interface BiometricData {
   activity_level: number
 }
 
+export interface SkinfoldValues {
+  chest_mm?: number
+  midaxillary_mm?: number
+  triceps_mm?: number
+  subscapular_mm?: number
+  abdomen_mm?: number
+  suprailiac_mm?: number
+  thigh_mm?: number
+}
+
+export interface SkinfoldCalculationRequest extends SkinfoldValues {
+  sex: 'male' | 'female'
+  age_years: number
+  weight_kg?: number
+  measurement_unit: 'mm'
+}
+
+export interface SkinfoldCalculationResult {
+  id?: number
+  method: string
+  measured_at: string
+  sum_of_skinfolds_mm: number
+  body_density: number
+  body_fat_percent: number
+  fat_free_mass_percent: number
+  fat_mass_kg?: number | null
+  lean_mass_kg?: number | null
+  warnings: string[]
+}
+
+export interface SkinfoldAIParseResponse {
+  parsed: SkinfoldValues
+  warnings: string[]
+}
+
 // Nutrition Types
 export interface MacronutrientData {
   carbs: number
@@ -153,6 +188,66 @@ export interface SuggestionData {
   type: string
   priority: string
   created_at: string
+}
+
+// Progress Types
+export interface ProgressMetrics {
+  peso_inicial_kg?: number
+  peso_actual_kg?: number
+  delta_peso_kg?: number
+  porcentaje_grasa_inicial?: number
+  porcentaje_grasa_actual?: number
+  delta_grasa_pct?: number
+  porcentaje_magra_inicial?: number
+  porcentaje_magra_actual?: number
+  delta_magra_pct?: number
+}
+
+export interface ProgressEvaluationResponse {
+  score: number
+  estado: string
+  resumen: string
+  metricas: ProgressMetrics
+  periodo_usado: string
+  advertencias: string[]
+}
+
+export interface TimelinePoint {
+  fecha: string
+  valor: number
+}
+
+export interface DailyCaloriesPoint {
+  fecha: string
+  consumidas: number
+  meta: number
+}
+
+export interface DailyMacroPercentagePoint {
+  fecha: string
+  carbohidratos_pct: number
+  proteinas_pct: number
+  grasas_pct: number
+}
+
+export interface ProgressTimelineSeries {
+  peso: TimelinePoint[]
+  porcentaje_grasa: TimelinePoint[]
+  porcentaje_masa_magra: TimelinePoint[]
+  calorias_diarias: DailyCaloriesPoint[]
+  macros_porcentaje: DailyMacroPercentagePoint[]
+}
+
+export interface ProgressTimelineResponse {
+  periodo: string
+  rango_inicio: string
+  rango_fin: string
+  series: ProgressTimelineSeries
+  resumen: {
+    calorias_semana_real: number
+    calorias_semana_meta: number
+  }
+  advertencias: string[]
 }
 
 export interface FoodParseRequest {
@@ -280,6 +375,35 @@ export const foodAPI = {
 
   parseAndLog: async (payload: FoodParseRequest): Promise<FoodParseLogResponse> => {
     const response = await api.post('/food/parse-and-log', payload)
+    return response.data
+  },
+}
+
+export const usersAPI = {
+  calculateSkinfolds: async (payload: SkinfoldCalculationRequest): Promise<SkinfoldCalculationResult> => {
+    const response = await api.post('/users/me/skinfolds', payload)
+    return response.data
+  },
+
+  getSkinfoldHistory: async (limit: number = 20): Promise<SkinfoldCalculationResult[]> => {
+    const response = await api.get('/users/me/skinfolds', { params: { limit } })
+    return response.data
+  },
+
+  parseSkinfoldsWithAI: async (text: string): Promise<SkinfoldAIParseResponse> => {
+    const response = await api.post('/users/me/skinfolds/ai-parse', { text })
+    return response.data
+  },
+}
+
+export const progressAPI = {
+  getEvaluation: async (periodo: 'semana' | 'mes' | 'anio' = 'mes'): Promise<ProgressEvaluationResponse> => {
+    const response = await api.post('/users/me/progress-evaluation', { periodo })
+    return response.data
+  },
+
+  getTimeline: async (periodo: 'semana' | 'mes' | 'anio' = 'mes'): Promise<ProgressTimelineResponse> => {
+    const response = await api.get('/users/me/progress/timeline', { params: { periodo } })
     return response.data
   },
 }

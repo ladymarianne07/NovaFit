@@ -55,32 +55,26 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
   const objectiveMetadata: Record<FitnessObjective, {
     label: string
     description: string
-    color: string
   }> = {
     maintenance: {
       label: 'Mantenimiento',
-      description: 'Mantén tu peso actual',
-      color: '#3b82f6'
+      description: 'Mantén tu peso actual'
     },
     fat_loss: {
       label: 'Pérdida de Grasa',
-      description: 'Reduce peso de manera controlada',
-      color: '#ef4444'
+      description: 'Reduce peso de manera controlada'
     },
     muscle_gain: {
       label: 'Ganancia Muscular',
-      description: 'Construye músculo magro',
-      color: '#10b981'
+      description: 'Construye músculo magro'
     },
     body_recomp: {
       label: 'Recomposición Corporal',
-      description: 'Pierde grasa y gana músculo',
-      color: '#f59e0b'
+      description: 'Pierde grasa y gana músculo'
     },
     performance: {
       label: 'Rendimiento Atlético',
-      description: 'Optimiza para el desempeño',
-      color: '#8b5cf6'
+      description: 'Optimiza para el desempeño'
     }
   }
 
@@ -117,7 +111,7 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
         {stage === 'objective' && (
           <>
             <label className="form-label objective-step-title">
-              <Target size={18} style={{ marginRight: '8px' }} />
+              <Target size={18} className="objective-step-title-icon" />
               Elige tu objetivo
             </label>
             <p className="selector-hint">Selecciona una opción para continuar al nivel de intensidad.</p>
@@ -127,14 +121,11 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
                 <button
                   key={obj}
                   type="button"
-                  className={`objective-card ${objective === obj ? 'active' : ''}`}
+                  className={`objective-card objective-card--${obj} ${objective === obj ? 'active' : ''}`}
                   onClick={() => handleObjectiveChange(obj)}
-                  style={{
-                    borderColor: objective === obj ? objectiveMetadata[obj].color : 'rgba(255, 255, 255, 0.18)'
-                  }}
                 >
                   <div className="objective-card-header">
-                    <span className="objective-label">{objectiveMetadata[obj].label}</span>
+                    <span className={`objective-label objective-label--${obj}`}>{objectiveMetadata[obj].label}</span>
                   </div>
                   <p className="objective-description">{objectiveMetadata[obj].description}</p>
                 </button>
@@ -155,13 +146,13 @@ const ObjectiveForm: React.FC<ObjectiveFormProps> = ({
                 Cambiar objetivo
               </button>
 
-              <div className="objective-selected-chip" style={{ borderColor: `${objectiveMetadata[objective].color}88` }}>
+              <div className={`objective-selected-chip objective-selected-chip--${objective}`}>
                 {objectiveMetadata[objective].label}
               </div>
             </div>
 
             <label className="form-label objective-step-title">
-              <TrendingUp size={18} style={{ marginRight: '8px' }} />
+              <TrendingUp size={18} className="objective-step-title-icon" />
               Nivel de intensidad
             </label>
             <p className="selector-hint">Elige qué tan rápido quieres avanzar.</p>

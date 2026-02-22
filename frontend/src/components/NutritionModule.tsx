@@ -60,43 +60,124 @@ const MEAL_TYPE_LABELS: Record<MealType, string> = {
 }
 
 const FOOD_NAME_TRANSLATIONS: Record<string, string> = {
+  // Proteínas
   chicken: 'pollo',
   'chicken breast': 'pechuga de pollo',
+  'chicken thigh': 'muslo de pollo',
   beef: 'carne de res',
+  'ground beef': 'carne picada',
+  steak: 'bife',
+  pork: 'cerdo',
+  'pork chop': 'chuleta de cerdo',
   fish: 'pescado',
   salmon: 'salmón',
   tuna: 'atún',
+  cod: 'bacalao',
+  shrimp: 'camarones',
   egg: 'huevo',
   eggs: 'huevos',
+  'egg white': 'clara de huevo',
+  'egg whites': 'claras de huevo',
+  tofu: 'tofu',
+  tempeh: 'tempeh',
+  
+  // Carbohidratos
   rice: 'arroz',
   white_rice: 'arroz blanco',
   brown_rice: 'arroz integral',
   pasta: 'pasta',
+  spaghetti: 'espagueti',
+  noodles: 'fideos',
   bread: 'pan',
+  'whole wheat bread': 'pan integral',
+  'white bread': 'pan blanco',
+  toast: 'tostada',
   potato: 'papa',
   potatoes: 'papas',
   sweet_potato: 'batata',
+  'sweet potatoes': 'batatas',
   oatmeal: 'avena',
+  oats: 'avena',
+  quinoa: 'quinoa',
+  couscous: 'cuscús',
+  
+  // Lácteos
   yogurt: 'yogur',
+  'greek yogurt': 'yogur griego',
   milk: 'leche',
+  'whole milk': 'leche entera',
+  'skim milk': 'leche descremada',
   cheese: 'queso',
+  'cottage cheese': 'queso cottage',
+  'cream cheese': 'queso crema',
+  butter: 'manteca',
+  cream: 'crema',
+  
+  // Frutas
   banana: 'banana',
   apple: 'manzana',
   orange: 'naranja',
   strawberry: 'frutilla',
   strawberries: 'frutillas',
+  blueberry: 'arándano',
+  blueberries: 'arándanos',
+  grapes: 'uvas',
+  watermelon: 'sandía',
+  melon: 'melón',
+  pear: 'pera',
+  peach: 'durazno',
+  pineapple: 'ananá',
+  mango: 'mango',
+  kiwi: 'kiwi',
+  
+  // Vegetales
   avocado: 'palta',
   lettuce: 'lechuga',
   tomato: 'tomate',
   onion: 'cebolla',
+  garlic: 'ajo',
   carrot: 'zanahoria',
   broccoli: 'brócoli',
   spinach: 'espinaca',
+  kale: 'col rizada',
+  cucumber: 'pepino',
+  pepper: 'pimiento',
+  'bell pepper': 'morrón',
+  zucchini: 'calabacín',
+  eggplant: 'berenjena',
+  mushroom: 'champiñón',
+  mushrooms: 'champiñones',
+  corn: 'maíz',
+  peas: 'arvejas',
+  
+  // Legumbres
   beans: 'porotos',
+  'black beans': 'porotos negros',
+  'kidney beans': 'porotos colorados',
   lentils: 'lentejas',
+  chickpeas: 'garbanzos',
+  
+  // Grasas
   nuts: 'frutos secos',
+  almonds: 'almendras',
+  walnuts: 'nueces',
+  peanuts: 'maníes',
+  'peanut butter': 'manteca de maní',
+  'almond butter': 'manteca de almendra',
   olive_oil: 'aceite de oliva',
-  water: 'agua'
+  'olive oil': 'aceite de oliva',
+  'coconut oil': 'aceite de coco',
+  'vegetable oil': 'aceite vegetal',
+  
+  // Otros
+  water: 'agua',
+  coffee: 'café',
+  tea: 'té',
+  juice: 'jugo',
+  'orange juice': 'jugo de naranja',
+  protein: 'proteína',
+  'protein shake': 'batido de proteína',
+  'protein powder': 'proteína en polvo'
 }
 
 const normalizeMealType = (value: string): MealType => {
@@ -183,6 +264,7 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
   const [voiceErrorMessage, setVoiceErrorMessage] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const isStoppingRecognitionRef = useRef(false)
+  const mealTouchStartXRef = useRef<number | null>(null)
 
   const isVoiceInputSupported = useMemo(() => getSpeechRecognitionConstructor() !== null, [])
 
@@ -374,13 +456,33 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
 
   const formatMacro = (value: number) => Math.round(value)
 
+  const handleMealsTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    mealTouchStartXRef.current = event.touches[0]?.clientX ?? null
+  }
+
+  const handleMealsTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (mealTouchStartXRef.current === null) return
+
+    const endX = event.changedTouches[0]?.clientX ?? mealTouchStartXRef.current
+    const deltaX = endX - mealTouchStartXRef.current
+    const swipeThreshold = 45
+
+    if (Math.abs(deltaX) < swipeThreshold) {
+      mealTouchStartXRef.current = null
+      return
+    }
+
+    if (deltaX < 0) {
+      setActiveMealIndex((current) => Math.min(current + 1, todayMeals.length - 1))
+    } else {
+      setActiveMealIndex((current) => Math.max(current - 1, 0))
+    }
+
+    mealTouchStartXRef.current = null
+  }
+
   return (
     <section className={`nutrition-module ${className}`.trim()} aria-label="Módulo de alimentación">
-      <header className="nutrition-module-header">
-        <h2 className="nutrition-module-title">Comidas</h2>
-        <p className="nutrition-module-subtitle">Ingresa tu comida diaria</p>
-      </header>
-
       <div className="nutrition-top-action">
         <button
           type="button"
@@ -396,6 +498,9 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
           <label className="nutrition-ai-label" htmlFor="ai-meal-input">
             Describe tu comida
           </label>
+          <p className="nutrition-ai-hint">
+            💡 Incluye cantidades en <strong>gramos</strong> o <strong>porciones</strong> para mayor precisión
+          </p>
           <textarea
             id="ai-meal-input"
             className="nutrition-ai-textarea"
@@ -468,7 +573,10 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
 
         {isLoadingMeals ? (
           <div className="nutrition-empty-state">
-            <p>Cargando comidas...</p>
+            <div className="loading-stack">
+              <div className="neon-loader neon-loader--sm" aria-hidden="true"></div>
+              <p>Cargando comidas...</p>
+            </div>
           </div>
         ) : todayMeals.length === 0 ? (
           <div className="nutrition-empty-state">
@@ -502,7 +610,12 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
               </button>
             </div>
 
-            <div className="nutrition-slider-window" aria-live="polite">
+            <div
+              className="nutrition-slider-window"
+              aria-live="polite"
+              onTouchStart={handleMealsTouchStart}
+              onTouchEnd={handleMealsTouchEnd}
+            >
               <div
                 className="nutrition-slider-track"
                 style={{ transform: `translateX(-${activeMealIndex * 100}%)` }}

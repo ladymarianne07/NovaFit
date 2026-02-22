@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from ..db.models import User
+from ..db.models import User, Event
 from ..schemas.user import UserCreate, Gender, ActivityLevel, UserBiometricsUpdate
 from ..core.security import get_password_hash, verify_password
 from ..services.biometric_service import BiometricService
@@ -243,6 +243,25 @@ class UserService:
         
         # If any biometric field is being updated, recalculate metrics
         if updates:
+            # Capture weight change as event if weight is being updated
+            if "weight" in updates and updates["weight"] is not None:
+                old_weight = user.weight
+                new_weight = updates["weight"]
+                if old_weight != new_weight:
+                    weight_event = Event(
+                        user_id=user.id,
+                        event_type="weight",
+                        title=f"Actualización de peso: {new_weight} kg",
+                        description=f"Cambio de {old_weight} kg a {new_weight} kg",
+                        data={
+                            "weight_kg": new_weight,
+                            "previous_weight_kg": old_weight,
+                            "change_kg": round(new_weight - old_weight, 2),
+                        },
+                        event_timestamp=datetime.now(timezone.utc),
+                    )
+                    self.db.add(weight_event)
+            
             # Calculate new BMR and daily expenditure with updated values
             new_bmr, new_daily_expenditure = BiometricService.update_user_biometrics_with_recalculation(
                 current_user=user,
@@ -256,6 +275,10 @@ class UserService:
             # Update calculated values
             user.bmr = new_bmr
             user.daily_caloric_expenditure = new_daily_expenditure
+
+            # Keep objective targets in sync when biometric values (and therefore TDEE) change
+            if user.objective:
+                BiometricService.calculate_and_store_objective_targets(user)
             
             # Commit changes
             self.db.commit()
@@ -286,6 +309,25 @@ class UserService:
         
         # Update biometric fields with recalculation if any biometric data changed
         if biometric_updates:
+            # Capture weight change as event if weight is being updated
+            if "weight" in biometric_updates and biometric_updates["weight"] is not None:
+                old_weight = user.weight
+                new_weight = biometric_updates["weight"]
+                if old_weight != new_weight:
+                    weight_event = Event(
+                        user_id=user.id,
+                        event_type="weight",
+                        title=f"Actualización de peso: {new_weight} kg",
+                        description=f"Cambio de {old_weight} kg a {new_weight} kg",
+                        data={
+                            "weight_kg": new_weight,
+                            "previous_weight_kg": old_weight,
+                            "change_kg": round(new_weight - old_weight, 2),
+                        },
+                        event_timestamp=datetime.now(timezone.utc),
+                    )
+                    self.db.add(weight_event)
+            
             # Calculate new metrics
             new_bmr, new_daily_expenditure = BiometricService.update_user_biometrics_with_recalculation(
                 current_user=user,
@@ -304,6 +346,10 @@ class UserService:
             # Update calculated values
             user.bmr = new_bmr
             user.daily_caloric_expenditure = new_daily_expenditure
+
+            # Keep objective targets in sync when biometric values (and therefore TDEE) change
+            if user.objective:
+                BiometricService.calculate_and_store_objective_targets(user)
         
         self.db.commit()
         self.db.refresh(user)
@@ -313,6 +359,10 @@ class UserService:
         """Update user's calculated BMR and daily expenditure metrics"""
         user.bmr = bmr
         user.daily_caloric_expenditure = daily_expenditure
+
+        # Keep objective targets in sync when manual recalculation is triggered
+        if user.objective:
+            BiometricService.calculate_and_store_objective_targets(user)
         
         self.db.commit()
         self.db.refresh(user)

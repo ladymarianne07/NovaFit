@@ -190,4 +190,35 @@ describe('Register Page - Design System Integration', () => {
 
     expect(mockShowSuccess).toHaveBeenCalled()
   })
+
+  test('shows error when email is already registered (409)', async () => {
+    mockRegister.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { detail: 'Email already registered' }
+      }
+    })
+
+    render(<RegisterWrapper />)
+
+    completeStep1()
+
+    await waitFor(() => {
+      expect(screen.getByText(/perfil biométrico/i)).toBeInTheDocument()
+    })
+
+    completeStep2()
+    fireEvent.click(screen.getByRole('button', { name: /configurar objetivo/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/objetivo fitness/i)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /mantenimiento/i }))
+    fireEvent.click(screen.getByRole('button', { name: /completar registro/i }))
+
+    await waitFor(() => {
+      expect(mockShowError).toHaveBeenCalled()
+    })
+  })
 })

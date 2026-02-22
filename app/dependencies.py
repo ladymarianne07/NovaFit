@@ -5,6 +5,7 @@ from .db.database import get_database_session
 from .core.security import extract_user_id_from_token
 from .services.user_service import UserService
 from .services.biometric_service import BiometricService
+from .services.skinfold_service import SkinfoldService
 from .db.models import User
 from .constants import ErrorMessages
 from .core.custom_exceptions import TokenValidationError
@@ -22,6 +23,11 @@ def get_user_service(db: Session = Depends(get_database_session)) -> UserService
 def get_biometric_service() -> BiometricService:
     """Biometric service dependency injection"""
     return BiometricService()
+
+
+def get_skinfold_service(db: Session = Depends(get_database_session)) -> SkinfoldService:
+    """Skinfold service dependency injection"""
+    return SkinfoldService(db)
 
 
 def get_current_user(

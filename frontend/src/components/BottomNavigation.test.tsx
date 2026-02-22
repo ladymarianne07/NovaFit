@@ -19,9 +19,10 @@ describe('BottomNavigation', () => {
       />
     )
 
+    expect(screen.getByText('Home')).toBeInTheDocument()
     expect(screen.getByText('Perfil')).toBeInTheDocument()
     expect(screen.getByText('Comidas')).toBeInTheDocument()
-    expect(screen.getByText('Entrenamiento')).toBeInTheDocument()
+    expect(screen.getByText('Entreno')).toBeInTheDocument()
     expect(screen.getByText('Progreso')).toBeInTheDocument()
     expect(screen.getByText('Salir')).toBeInTheDocument()
   })
@@ -77,14 +78,14 @@ describe('BottomNavigation', () => {
       />
     )
 
-    const profileButton = screen.getByRole('button', { name: /perfil/i })
-    expect(profileButton).toHaveClass('active')
+    const dashboardButton = screen.getByRole('button', { name: /home/i })
+    expect(dashboardButton).toHaveClass('active')
   })
 
   it('handles missing callback props gracefully', () => {
     render(<BottomNavigation activeTab="training" />)
 
-    const trainingButton = screen.getByRole('button', { name: /entrenamiento/i })
+    const trainingButton = screen.getByRole('button', { name: /entreno/i })
     
     // Should not throw error when clicking
     expect(() => {
@@ -102,9 +103,10 @@ describe('BottomNavigation', () => {
     )
 
     // Check that buttons render (icons are inside buttons)
+    expect(screen.getByRole('button', { name: /home/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /perfil/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /comidas/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /entrenamiento/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /entreno/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /progreso/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /salir/i })).toBeInTheDocument()
   })

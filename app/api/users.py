@@ -2,12 +2,23 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_user_service, get_biometric_service, get_current_active_user
+from ..dependencies import get_user_service, get_biometric_service, get_skinfold_service, get_current_active_user
 from ..schemas.user import UserResponse, UserUpdate, UserBiometricsUpdate, FitnessObjective
+from ..schemas.progress import ProgressEvaluationResponse, ProgressEvaluationRequest, ProgressTimelineResponse
+from ..schemas.skinfold import (
+    SkinfoldCalculationRequest,
+    SkinfoldCalculationResponse,
+    SkinfoldHistoryItem,
+    SkinfoldAIParseRequest,
+    SkinfoldAIParseResponse,
+)
 from ..services.user_service import UserService
 from ..services.biometric_service import BiometricService
-from ..db.models import User
-from ..constants import SuccessMessages
+from ..services.skinfold_service import SkinfoldService
+from ..services.progress_evaluation_service import evaluarProgreso
+from ..services.progress_timeline_service import ProgressTimelineService
+from ..db.models import User, SkinfoldMeasurement
+from ..db.database import get_database_session
 from ..core.custom_exceptions import BiometricValidationError, IncompleteBiometricDataError
 from pydantic import BaseModel, Field
 
@@ -24,6 +35,15 @@ class ObjectiveUpdate(BaseModel):
 
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+OBJECTIVE_TO_PROGRESS_OBJECTIVE = {
+    "fat_loss": "perdida_grasa",
+    "maintenance": "mantenimiento",
+    "muscle_gain": "aumento_muscular",
+    "body_recomp": "recomposicion",
+    "performance": "rendimiento",
+}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -160,3 +180,117 @@ async def update_user_objective(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to update objective: {str(e)}"
         )
+
+
+@router.post("/me/progress-evaluation", response_model=ProgressEvaluationResponse)
+async def evaluate_current_user_progress(
+    payload: ProgressEvaluationRequest | None = None,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_database_session),
+):
+    """Evaluate user progress using stored objective + available historical body metrics.
+
+    Data source strategy:
+    - Objective: current user's configured objective (fallback: maintenance)
+    - History: skinfold measurements ordered by date ASC
+    - Weight: measurement weight when available, else current user weight
+    """
+    target_objective = OBJECTIVE_TO_PROGRESS_OBJECTIVE.get(current_user.objective or "", "mantenimiento")
+
+    measurements = (
+        db.query(SkinfoldMeasurement)
+        .filter(SkinfoldMeasurement.user_id == current_user.id)
+        .order_by(SkinfoldMeasurement.measured_at.asc())
+        .all()
+    )
+
+    history_payload: list[dict] = []
+
+    if measurements:
+        for measurement in measurements:
+            resolved_weight = measurement.weight_kg if measurement.weight_kg is not None else current_user.weight
+
+            history_payload.append(
+                {
+                    "fecha": measurement.measured_at,
+                    "peso": resolved_weight,
+                    "porcentaje_grasa": measurement.body_fat_percent,
+                    "porcentaje_masa_magra": measurement.fat_free_mass_percent,
+                }
+            )
+    else:
+        # Fallback to current profile point so evaluator can return explicit "insufficient data" warning
+        history_payload = [
+            {
+                "fecha": current_user.created_at,
+                "peso": current_user.weight,
+                "porcentaje_grasa": None,
+                "porcentaje_masa_magra": None,
+            }
+        ]
+
+    requested_period = payload.periodo.value if payload is not None else "mes"
+
+    evaluation = evaluarProgreso(
+        objetivo=target_objective,
+        periodo=requested_period,
+        historial=history_payload,
+    )
+    return evaluation
+
+
+@router.get("/me/progress/timeline", response_model=ProgressTimelineResponse)
+async def get_progress_timeline(
+    periodo: str = "mes",
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_database_session),
+):
+    """Get historical progress timeline for charts.
+
+    Returns time-series data for:
+    - Weight (from explicit weight events + skinfold measurements)
+    - Body fat percentage (from skinfold measurements)
+    - Lean mass percentage (from skinfold measurements)
+    - Daily calories consumed vs target
+    - Daily macro percentages
+    """
+    timeline_data = ProgressTimelineService.build_timeline(db=db, user=current_user, periodo=periodo)
+    return timeline_data
+
+
+@router.post("/me/skinfolds/ai-parse", response_model=SkinfoldAIParseResponse)
+async def parse_skinfolds_ai(
+    payload: SkinfoldAIParseRequest,
+    current_user: User = Depends(get_current_active_user),
+    skinfold_service: SkinfoldService = Depends(get_skinfold_service),
+):
+    """Parse skinfold text input with AI-assisted rules (regex-based extraction)."""
+    parsed, warnings = skinfold_service.parse_ai_text(payload.text)
+    return {
+        "parsed": parsed,
+        "warnings": warnings,
+    }
+
+
+@router.post("/me/skinfolds", response_model=SkinfoldCalculationResponse)
+async def calculate_and_save_skinfolds(
+    payload: SkinfoldCalculationRequest,
+    current_user: User = Depends(get_current_active_user),
+    skinfold_service: SkinfoldService = Depends(get_skinfold_service),
+):
+    """Calculate body composition using skinfolds and persist the result."""
+    result = skinfold_service.calculate(payload)
+    skinfold_service.save_measurement(current_user, payload, result)
+    return result
+
+
+@router.get("/me/skinfolds", response_model=List[SkinfoldHistoryItem])
+async def get_skinfold_history(
+    limit: int = 20,
+    current_user: User = Depends(get_current_active_user),
+    skinfold_service: SkinfoldService = Depends(get_skinfold_service),
+):
+    """Return latest saved skinfold calculations for current user."""
+    safe_limit = min(max(limit, 1), 100)
+    items = skinfold_service.get_history(current_user.id, safe_limit)
+    return items

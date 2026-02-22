@@ -26,10 +26,10 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
         <div className="suggestion-title">
           <Sparkles className="suggestion-star" size={20} />
           <span>Sugerencia del Día</span>
-        </div>
-        <div className="suggestion-ai-badge">
-          <Sparkles size={14} />
-          <span>IA</span>
+          <div className="suggestion-ai-badge">
+            <Sparkles size={14} />
+            <span>IA</span>
+          </div>
         </div>
       </div>
 
@@ -37,11 +37,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({
       <div className="suggestion-content">
         {loading ? (
           <div className="suggestion-loading">
-            <div className="loading-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
+            <div className="neon-loader neon-loader--md" aria-hidden="true"></div>
             <p>Generando sugerencia personalizada...</p>
           </div>
         ) : (

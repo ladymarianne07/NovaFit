@@ -1,5 +1,5 @@
 import React from 'react'
-import { Home, Utensils, Dumbbell, TrendingUp, LogOut } from 'lucide-react'
+import { Home, Utensils, Dumbbell, TrendingUp, LogOut, UserRound } from 'lucide-react'
 
 interface BottomNavigationProps {
   activeTab?: string
@@ -8,15 +8,21 @@ interface BottomNavigationProps {
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({
-  activeTab = 'profile',
+  activeTab = 'dashboard',
   onTabChange,
   onLogout
 }) => {
   const navigationItems = [
     {
+      id: 'dashboard',
+      label: 'Home',
+      icon: Home,
+      onClick: () => onTabChange?.('dashboard')
+    },
+    {
       id: 'profile',
       label: 'Perfil',
-      icon: Home,
+      icon: UserRound,
       onClick: () => onTabChange?.('profile')
     },
     {
@@ -27,7 +33,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({
     },
     {
       id: 'training',
-      label: 'Entrenamiento',
+      label: 'Entreno',
       icon: Dumbbell,
       onClick: () => onTabChange?.('training')
     },

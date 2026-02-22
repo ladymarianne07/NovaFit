@@ -10,6 +10,7 @@ export interface CustomSelectOption {
 interface CustomSelectProps {
   id: string
   label: string
+  labelIcon?: React.ReactNode
   value: string
   onChange: (value: string) => void
   options: CustomSelectOption[]
@@ -18,11 +19,13 @@ interface CustomSelectProps {
   error?: string
   required?: boolean
   disabled?: boolean
+  panelPlacement?: 'down' | 'up'
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
   id,
   label,
+  labelIcon,
   value,
   onChange,
   options,
@@ -30,7 +33,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   icon,
   error,
   required = false,
-  disabled = false
+  disabled = false,
+  panelPlacement = 'down'
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -64,8 +68,12 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
   return (
     <div className="login-field" ref={containerRef}>
-      <label htmlFor={id} className="login-label">
-        {label}{required ? ' *' : ''}
+      <label
+        htmlFor={id}
+        className={`login-label ${labelIcon ? 'custom-select-label-with-icon' : ''}`.trim()}
+      >
+        {labelIcon && <span className="custom-select-label-icon" aria-hidden="true">{labelIcon}</span>}
+        <span>{label}{required ? ' *' : ''}</span>
       </label>
 
       <div className="login-input-container custom-select-container">
@@ -74,7 +82,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         <button
           id={id}
           type="button"
-          className={`login-input custom-select-trigger ${error ? 'error' : ''} ${isOpen ? 'open' : ''}`.trim()}
+          className={`login-input custom-select-trigger ${!icon ? 'no-icon' : ''} ${error ? 'error' : ''} ${isOpen ? 'open' : ''}`.trim()}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
           aria-invalid={Boolean(error)}
@@ -88,7 +96,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
         </button>
 
         {isOpen && !disabled && (
-          <div className="custom-select-panel" role="listbox" aria-label={label}>
+          <div
+            className={`custom-select-panel ${panelPlacement === 'up' ? 'panel-up' : ''}`.trim()}
+            role="listbox"
+            aria-label={label}
+          >
             {options.map((option) => {
               const isSelected = option.value === value
               return (

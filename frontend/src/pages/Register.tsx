@@ -125,7 +125,7 @@ const Register: React.FC = () => {
     }
 
     if (!gender.trim()) {
-      errors.gender = requiredFieldMessage('El género')
+      errors.gender = requiredFieldMessage('El sexo')
     }
 
     if (!weight.trim()) {
@@ -158,7 +158,7 @@ const Register: React.FC = () => {
     if (!genderResult.isValid) {
       const message = translateValidationMessage(genderResult.error)
       setStep2Errors({ gender: message })
-      showError(message, 'Género inválido')
+      showError(message, 'Sexo inválido')
       return false
     }
     
@@ -424,7 +424,7 @@ const Register: React.FC = () => {
                 />
                 <CustomSelect
                   id="gender"
-                  label="Género"
+                  label="Sexo"
                   value={gender}
                   onChange={(selectedValue) => {
                     setGender(selectedValue as 'male' | 'female')

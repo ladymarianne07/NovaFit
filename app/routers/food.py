@@ -51,7 +51,7 @@ async def parse_and_calculate_food(
                 content={"detail": error_code},
             )
 
-        if error_code in {"missing_gemini_api_key", "gemini_request_failed"}:
+        if error_code in {"missing_gemini_api_key", "gemini_request_failed", "gemini_model_not_found"}:
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"detail": error_code},
@@ -129,7 +129,7 @@ async def parse_and_log_food(
                 content={"detail": error_code},
             )
 
-        if error_code in {"missing_gemini_api_key", "gemini_request_failed"}:
+        if error_code in {"missing_gemini_api_key", "gemini_request_failed", "gemini_model_not_found"}:
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"detail": error_code},

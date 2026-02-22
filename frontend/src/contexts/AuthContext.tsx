@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { User, authAPI, LoginRequest, RegisterRequest, BiometricData } from '../services/api'
+import { User, authAPI, LoginRequest, RegisterRequest, BiometricData, FitnessObjective } from '../services/api'
 
 interface AuthContextType {
   user: User | null
@@ -8,6 +8,7 @@ interface AuthContextType {
   register: (userData: RegisterRequest) => Promise<void>
   logout: () => void
   updateBiometrics: (biometrics: BiometricData) => Promise<void>
+  updateObjective: (objective: FitnessObjective, aggressivenessLevel: number) => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -84,6 +85,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const updateObjective = async (objective: FitnessObjective, aggressivenessLevel: number): Promise<void> => {
+    try {
+      const updatedUser = await authAPI.updateObjective(objective, aggressivenessLevel)
+      setUser(updatedUser)
+    } catch (error) {
+      throw error
+    }
+  }
+
   const refreshUser = async (): Promise<void> => {
     try {
       const userData = await authAPI.getCurrentUser()
@@ -100,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     register,
     logout,
     updateBiometrics,
+    updateObjective,
     refreshUser,
   }
 

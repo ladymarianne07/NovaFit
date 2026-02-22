@@ -79,6 +79,18 @@ class NutritionService:
         Returns:
             MacronutrientTargets with carbs, protein, fat in grams
         """
+        # Prefer objective-based macro targets when available
+        carbs_target_g = cls._safe_float(getattr(user, "carbs_target_g", None))
+        protein_target_g = cls._safe_float(getattr(user, "protein_target_g", None))
+        fat_target_g = cls._safe_float(getattr(user, "fat_target_g", None))
+
+        if carbs_target_g > 0 and protein_target_g > 0 and fat_target_g > 0:
+            return MacronutrientTargets(
+                carbs=round(carbs_target_g, 1),
+                protein=round(protein_target_g, 1),
+                fat=round(fat_target_g, 1),
+            )
+
         if not user.daily_caloric_expenditure:
             raise ValidationError("User must have calculated daily caloric expenditure")
         
@@ -194,7 +206,12 @@ class NutritionService:
         
         # Get user's calorie target
         user = db.query(User).filter(User.id == user_id).first()
-        calories_target = user.daily_caloric_expenditure if user else 2000
+        if user:
+            objective_target = cls._safe_float(getattr(user, "target_calories", None))
+            maintenance_target = cls._safe_float(getattr(user, "daily_caloric_expenditure", None))
+            calories_target = objective_target if objective_target > 0 else maintenance_target
+        else:
+            calories_target = 2000
         calories_percentage = (total_calories / calories_target * 100) if calories_target > 0 else 0
         
         return MacronutrientResponse(
