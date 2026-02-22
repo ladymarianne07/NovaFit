@@ -403,6 +403,129 @@ app.include_router(new_feature.router, prefix="/new-features", tags=["new-featur
 - Use database indexes appropriately
 - Avoid N+1 query problems
 
+### 2. SQLAlchemy Model & Database Synchronization ⚠️ CRITICAL
+
+**This is a common source of production errors. Follow this carefully!**
+
+#### Golden Rule
+**Python model column names MUST EXACTLY MATCH database table column names**
+
+When you modify the database schema (adding columns, renaming columns), you MUST update the Python models to reflect these changes. Misalignment causes SQL errors at runtime.
+
+#### Synchronization Checklist
+
+Before deploying any changes that affect database columns:
+
+1. **Identify Changes**: List all column name changes in the database
+   ```sql
+   -- Example: Database has these columns
+   users.weight_kg       -- NOT weight
+   users.height_cm       -- NOT height  
+   users.bmr_bpm         -- NOT bmr
+   ```
+
+2. **Update Model Definition** (`app/db/models.py`)
+   ```python
+   class User(Base):
+       __tablename__ = "users"
+       
+       # ✅ CORRECT: Matches database column names
+       weight_kg = Column(Float, nullable=False)
+       height_cm = Column(Float, nullable=False)
+       bmr_bpm = Column(Float, nullable=False)
+       
+       # ❌ WRONG: These would cause SQL errors
+       # weight = Column(Float, nullable=False)
+       # height = Column(Float, nullable=False)
+       # bmr = Column(Float, nullable=False)
+   ```
+
+3. **Update All Service References**
+   Search all service files for references to the old column names:
+   ```python
+   # app/services/user_service.py
+   
+   # ❌ WRONG
+   user.weight = new_weight
+   user.height = new_height
+   old_bmr = user.bmr
+   
+   # ✅ CORRECT
+   user.weight_kg = new_weight
+   user.height_cm = new_height
+   old_bmr = user.bmr_bpm
+   ```
+
+4. **Update All Field Assignments** in Services
+   ```python
+   # When setting attributes
+   db_user = User(
+       weight=user_data.weight,        # ❌ WRONG
+       height=user_data.height,        # ❌ WRONG
+       bmr=bmr                         # ❌ WRONG
+   )
+   
+   # ✅ CORRECT
+   db_user = User(
+       weight_kg=user_data.weight,
+       height_cm=user_data.height,
+       bmr_bpm=bmr
+   )
+   ```
+
+5. **Check Dictionary Updates** (if using setattr)
+   ```python
+   updates = {
+       'weight': new_weight  # ❌ WRONG - key doesn't match column
+   }
+   for field, value in updates.items():
+       setattr(user, field, value)  # This will fail
+   
+   # ✅ CORRECT
+   updates = {
+       'weight_kg': new_weight  # ✅ CORRECT - key matches column
+   }
+   ```
+
+6. **Search & Replace Pattern**
+   Use find-and-replace to ensure consistency across all services:
+   ```
+   Find:    user\.weight\b    Replace: user.weight_kg
+   Find:    user\.height\b    Replace: user.height_cm
+   Find:    user\.bmr\b       Replace: user.bmr_bpm
+   ```
+
+#### Common Error Signs
+If you see these SQLAlchemy errors in production logs:
+```
+sqlalchemy.exc.ProgrammingError: column "user.weight" does not exist
+AttributeError: Cannot assign to attribute "weight" for class "User"
+KeyError: 'weight' in updates dictionary
+```
+
+**This means:** Your Python model doesn't match the actual database schema.
+
+#### Prevention Strategy
+1. **Before adding/renaming columns in migrations**, ask: "What Python model changes are needed?"
+2. **Update models first**, then write migrations
+3. **Run tests locally** with the new model/migration before deploying
+4. **Use grep to find all references**:
+   ```bash
+   grep -r "user\.weight" app/services/ app/api/
+   grep -r "\.height" app/services/ app/api/
+   ```
+
+#### Migration Best Practices
+When creating migrations:
+1. Update `app/db/models.py` first
+2. Create migration that renames columns in database
+3. Update all service layer code
+4. Update all API code that references the column
+5. Test locally with the new schema
+6. Deploy migration + code changes together (atomic)
+
+---
+
 ### 2. Service Layer
 - Keep services stateless when possible
 - Use dependency injection for better testability
