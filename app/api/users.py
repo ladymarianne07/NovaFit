@@ -256,7 +256,7 @@ async def evaluate_current_user_progress(
 
     if measurements:
         for measurement in measurements:
-            resolved_weight = measurement.weight_kg if measurement.weight_kg is not None else current_user.weight
+            resolved_weight = measurement.weight_kg if measurement.weight_kg is not None else current_user.weight_kg
 
             history_payload.append(
                 {
@@ -271,7 +271,7 @@ async def evaluate_current_user_progress(
         history_payload = [
             {
                 "fecha": current_user.created_at,
-                "peso": current_user.weight,
+                "peso": current_user.weight_kg,
                 "porcentaje_grasa": None,
                 "porcentaje_masa_magra": None,
             }

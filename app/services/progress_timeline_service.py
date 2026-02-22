@@ -126,12 +126,12 @@ class ProgressTimelineService:
 
         weight_points = sorted(weight_points, key=lambda point: point["fecha"])
 
-        if not weight_points and user.weight is not None:
+        if not weight_points and user.weight_kg is not None:
             warnings.append("No hay histórico de peso en el periodo. Se muestra el peso actual como referencia.")
             weight_points = [
                 {
                     "fecha": datetime.now(app_tz).isoformat(),
-                    "valor": round(cls._safe_float(user.weight), 1),
+                    "valor": round(cls._safe_float(user.weight_kg), 1),
                 }
             ]
 

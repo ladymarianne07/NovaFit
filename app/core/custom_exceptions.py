@@ -86,3 +86,18 @@ class InputValidationError(ValidationError):
     def __init__(self, field: str, message: str):
         self.field = field
         super().__init__(f"Validation error for {field}: {message}")
+
+
+class WorkoutValidationError(ValidationError):
+    """Raised when workout session input data is invalid."""
+    pass
+
+
+class WorkoutActivityNotFoundError(NovaFitnessException):
+    """Raised when activity mapping cannot resolve a valid activity key."""
+    pass
+
+
+class WorkoutWeightRequiredError(NovaFitnessException):
+    """Raised when calories calculation requires user weight and none is available."""
+    pass

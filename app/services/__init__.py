@@ -7,6 +7,7 @@ from .food_aggregator_service import FoodAggregatorService
 from .progress_evaluation_service import evaluar_progreso, evaluarProgreso
 from .progress_timeline_service import ProgressTimelineService
 from .user_service import UserService
+from .workout_service import WorkoutService
 
 __all__ = [
     "BiometricService",
@@ -14,5 +15,6 @@ __all__ = [
     "evaluar_progreso",
     "evaluarProgreso",
     "ProgressTimelineService",
-    "UserService"
+    "UserService",
+    "WorkoutService",
 ]

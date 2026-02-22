@@ -2,6 +2,7 @@ import logging
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from .models import Base
+from .workout_seed import seed_exercise_activities
 from ..models.food import FoodEntry  # noqa: F401 - ensure model registration
 from ..models.food_portion_cache import FoodPortionCache  # noqa: F401 - ensure model registration
 from ..config import settings
@@ -56,6 +57,14 @@ def create_tables():
     """Create all database tables and ensure backward-compatible schema updates."""
     Base.metadata.create_all(bind=engine)
     ensure_schema_compatibility()
+
+    with engine.begin() as connection:
+        seed_stats = seed_exercise_activities(connection)
+        logger.info(
+            "Workout activities seed applied (inserted=%s, updated=%s)",
+            seed_stats["inserted"],
+            seed_stats["updated"],
+        )
 
 
 def ensure_schema_compatibility() -> None:

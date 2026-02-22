@@ -211,3 +211,36 @@ class StatusCodes:
     CONFLICT = 409
     UNPROCESSABLE_ENTITY = 422
     INTERNAL_SERVER_ERROR = 500
+
+
+class WorkoutConstants:
+    """Constants for exercise to calories (MET-based) module."""
+
+    # Intensity normalization
+    INTENSITY_LOW = "low"
+    INTENSITY_MEDIUM = "medium"
+    INTENSITY_HIGH = "high"
+    VALID_INTENSITY_LEVELS = {INTENSITY_LOW, INTENSITY_MEDIUM, INTENSITY_HIGH}
+
+    # Session source and status
+    SOURCE_AI = "ai"
+    SOURCE_MANUAL = "manual"
+    SOURCE_IMPORT = "import"
+    VALID_SOURCES = {SOURCE_AI, SOURCE_MANUAL, SOURCE_IMPORT}
+
+    STATUS_DRAFT = "draft"
+    STATUS_FINAL = "final"
+    STATUS_ERROR = "error"
+    VALID_SESSION_STATUS = {STATUS_DRAFT, STATUS_FINAL, STATUS_ERROR}
+
+    # Validation ranges
+    MIN_DURATION_MINUTES = 1
+    MAX_DURATION_MINUTES = 1440
+    MIN_MET_VALUE = 0.1
+    MAX_MET_VALUE = 30.0
+    MIN_CORRECTION_FACTOR = 0.5
+    MAX_CORRECTION_FACTOR = 1.5
+
+    # Defaults
+    DEFAULT_INTENSITY_ESTIMATE = INTENSITY_MEDIUM
+    DEFAULT_CORRECTION_FACTOR = 1.0

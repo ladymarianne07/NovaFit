@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Boolean, Float
+from sqlalchemy import Column, Integer, String, DateTime, Date, Text, ForeignKey, JSON, Boolean, Float
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from ..constants import DatabaseConstants
@@ -56,6 +56,9 @@ class User(Base):
     # Relationships
     events = relationship("Event", back_populates="user", cascade="all, delete-orphan")
     skinfold_measurements = relationship("SkinfoldMeasurement", back_populates="user", cascade="all, delete-orphan")
+    workout_sessions = relationship("WorkoutSession", back_populates="user", cascade="all, delete-orphan")
+    workout_correction_factors = relationship("WorkoutCorrectionFactor", back_populates="user", cascade="all, delete-orphan")
+    exercise_daily_energy_logs = relationship("ExerciseDailyEnergyLog", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(email='{self.email}')>"
@@ -161,6 +164,150 @@ class SkinfoldMeasurement(Base):
 
     def __repr__(self):
         return f"<SkinfoldMeasurement(user_id={self.user_id}, method='{self.method}')>"
+
+
+class ExerciseActivity(Base):
+    """MET activity catalog for exercise calorie calculations."""
+
+    __tablename__ = "exercise_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    activity_key = Column(String(100), unique=True, nullable=False, index=True)
+    category = Column(String(100), nullable=False, index=True)
+    label_es = Column(String(150), nullable=False)
+
+    met_low = Column(Float, nullable=False)
+    met_medium = Column(Float, nullable=False)
+    met_high = Column(Float, nullable=False)
+
+    source_refs = Column(JSON, nullable=False, default=dict)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    workout_blocks = relationship("WorkoutSessionBlock", back_populates="activity")
+
+    def __repr__(self):
+        return f"<ExerciseActivity(activity_key='{self.activity_key}', category='{self.category}')>"
+
+
+class WorkoutSession(Base):
+    """Persisted workout session, usually generated from free-text AI parsing."""
+
+    __tablename__ = "workout_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    session_date = Column(Date, nullable=False, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    source = Column(String(20), nullable=False, default="ai")
+    status = Column(String(20), nullable=False, default="draft")
+
+    raw_input = Column(Text, nullable=True)
+    ai_output = Column(JSON, nullable=True)
+
+    total_kcal_min = Column(Float, nullable=True)
+    total_kcal_max = Column(Float, nullable=True)
+    total_kcal_est = Column(Float, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="workout_sessions")
+    blocks = relationship("WorkoutSessionBlock", back_populates="session", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<WorkoutSession(user_id={self.user_id}, date={self.session_date})>"
+
+
+class WorkoutSessionBlock(Base):
+    """Workout activity block within a session."""
+
+    __tablename__ = "workout_session_blocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("workout_sessions.id"), nullable=False, index=True)
+    activity_id = Column(Integer, ForeignKey("exercise_activities.id"), nullable=False, index=True)
+
+    block_order = Column(Integer, nullable=False)
+    duration_minutes = Column(Integer, nullable=False)
+
+    intensity_level = Column(String(20), nullable=True)
+    intensity_raw = Column(String(120), nullable=True)
+
+    weight_kg_used = Column(Float, nullable=True)
+
+    met_used_min = Column(Float, nullable=True)
+    met_used_max = Column(Float, nullable=True)
+
+    correction_factor = Column(Float, nullable=False, default=1.0)
+
+    kcal_min = Column(Float, nullable=True)
+    kcal_max = Column(Float, nullable=True)
+    kcal_est = Column(Float, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("WorkoutSession", back_populates="blocks")
+    activity = relationship("ExerciseActivity", back_populates="workout_blocks")
+
+    def __repr__(self):
+        return f"<WorkoutSessionBlock(session_id={self.session_id}, order={self.block_order})>"
+
+
+class WorkoutCorrectionFactor(Base):
+    """User-specific correction factors to calibrate MET estimations."""
+
+    __tablename__ = "workout_correction_factors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    scope = Column(String(20), nullable=False, default="global")
+    category = Column(String(100), nullable=True)
+    activity_key = Column(String(100), nullable=True)
+
+    factor = Column(Float, nullable=False, default=1.0)
+    method = Column(String(30), nullable=False, default="manual")
+
+    effective_from = Column(Date, nullable=False, default=lambda: datetime.now(timezone.utc).date())
+    effective_to = Column(Date, nullable=True)
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="workout_correction_factors")
+
+    def __repr__(self):
+        return f"<WorkoutCorrectionFactor(user_id={self.user_id}, scope='{self.scope}', factor={self.factor})>"
+
+
+class ExerciseDailyEnergyLog(Base):
+    """Daily exercise energy aggregates for dashboard usage."""
+
+    __tablename__ = "exercise_daily_energy_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    log_date = Column(Date, nullable=False, index=True)
+
+    exercise_kcal_min = Column(Float, nullable=False, default=0.0)
+    exercise_kcal_max = Column(Float, nullable=False, default=0.0)
+    exercise_kcal_est = Column(Float, nullable=False, default=0.0)
+
+    intake_kcal = Column(Float, nullable=False, default=0.0)
+    net_kcal_est = Column(Float, nullable=False, default=0.0)
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="exercise_daily_energy_logs")
+
+    def __repr__(self):
+        return f"<ExerciseDailyEnergyLog(user_id={self.user_id}, date={self.log_date})>"
 
 
 # Database indexes for performance

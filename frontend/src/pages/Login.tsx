@@ -77,15 +77,11 @@ const Login: React.FC = () => {
 
   return (
     <div className="login-container">
-      {/* Logo */}
-      <div className="login-logo">
-        <Zap className="w-8 h-8 text-white" />
-      </div>
-
       {/* Main Content */}
       <div className="login-content">
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="login-header">
+          <img src="/Logo.png" alt="NovaFitness Logo" className="login-logo-image" />
           <h1 className="login-title"> 
             <span className="login-title-brand">NovaFitness</span>
           </h1>
