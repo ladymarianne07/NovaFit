@@ -306,10 +306,16 @@
 }
 
 .login-logo {
-  position: absolute;
-  top: 2rem;
-  left: 2rem;
-  z-index: 2;
+  display: none;
+}
+
+.login-logo-image {
+  height: 12rem;
+  width: auto;
+  margin-bottom: 0.5rem;
+  object-fit: contain;
+  opacity: 0.85;
+  filter: blur(0.5px);
 }
 
 .login-content {
@@ -930,8 +936,11 @@
 /* Mobile Responsiveness */
 @media (max-width: 640px) {
   .login-logo {
-    top: 1rem;
-    left: 1rem;
+    display: none;
+  }
+
+  .login-logo-image {
+    height: 8rem;
   }
   
   .login-title {
