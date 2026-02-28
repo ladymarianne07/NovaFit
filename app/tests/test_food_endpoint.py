@@ -4,6 +4,118 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
 
+def test_parse_and_calculate_prefers_fatsecret_before_usda(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.fatsecret_service import FatSecretFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [ParsedFoodPayload(name="banana", quantity=100, unit="grams")]
+
+    def fake_fatsecret_search(_normalized_name: str):
+        return FatSecretFoodResult(
+            food_id="fs-123",
+            description="Banana",
+            calories_per_100g=89.0,
+            carbs_per_100g=22.8,
+            protein_per_100g=1.1,
+            fat_per_100g=0.3,
+            serving_size_grams=None,
+        )
+
+    def fake_usda_search(_normalized_name: str):
+        raise AssertionError("USDA should not be called when FatSecret already resolved the food")
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_fatsecret_food_by_name", fake_fatsecret_search)
+    monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "100 gramos de banana"},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+
+    assert data["food"] == "banana"
+    assert data["calories_per_100g"] == 89.0
+    assert data["total_calories"] == 89.0
+
+
+def test_parse_and_calculate_falls_back_to_usda_when_fatsecret_fails(
+    client: TestClient,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.fatsecret_service import FatSecretServiceError
+    from app.services.usda_service import USDAFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [ParsedFoodPayload(name="banana", quantity=100, unit="grams")]
+
+    def fake_fatsecret_search(_normalized_name: str):
+        raise FatSecretServiceError("food_not_found")
+
+    def fake_usda_search(_normalized_name: str):
+        return USDAFoodResult(
+            fdc_id="09040",
+            description="Bananas, raw",
+            calories_per_100g=88.0,
+            carbs_per_100g=22.8,
+            protein_per_100g=1.1,
+            fat_per_100g=0.3,
+            serving_size_grams=100.0,
+        )
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_fatsecret_food_by_name", fake_fatsecret_search)
+    monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "100 gramos de banana"},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+    assert data["food"] == "banana"
+    assert data["calories_per_100g"] == 88.0
+    assert data["total_calories"] == 88.0
+
+
+def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.usda_service import USDAFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [ParsedFoodPayload(name="banana", quantity=118, unit="grams")]
+
+    def fake_usda_search(_normalized_name: str):
+        return USDAFoodResult(
+            fdc_id="09040",
+            description="Bananas, raw",
+            calories_per_100g=88.0,
+            carbs_per_100g=22.8,
+            protein_per_100g=1.1,
+            fat_per_100g=0.3,
+            serving_size_grams=100.0,
+        )
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "me comi una banana mediana"},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+    assert data["food"] == "banana"
+    assert data["quantity_grams"] == 118.0
+    assert data["total_calories"] == 103.84
+
+
 def test_parse_and_calculate_returns_calories_and_macros(client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
@@ -214,3 +326,113 @@ def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(clie
     assert data["quantity_grams"] == 242.0
     assert data["total_calories"] > 70
     assert data["total_carbs"] > 5
+
+
+def test_parse_and_calculate_applies_conservative_defaults_for_ambiguous_breakfast(
+    client: TestClient,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from app.schemas.food import ParsedFoodPayload
+    from app.services.fatsecret_service import FatSecretFoodResult
+
+    def fake_parse_food_input(_text: str):
+        return [
+            ParsedFoodPayload(name="sweetener", quantity=1, unit="serving"),
+            ParsedFoodPayload(name="lactose-free milk", quantity=1, unit="serving"),
+            ParsedFoodPayload(name="coffee", quantity=1, unit="serving"),
+            ParsedFoodPayload(name="butter", quantity=1, unit="serving"),
+            ParsedFoodPayload(name="scrambled eggs", quantity=2, unit="serving"),
+            ParsedFoodPayload(name="whole wheat toast", quantity=1, unit="serving"),
+        ]
+
+    def fake_fatsecret_search(normalized_name: str):
+        mapping = {
+            "sweetener": FatSecretFoodResult(
+                food_id="s-1",
+                description="sweetener",
+                calories_per_100g=0.0,
+                carbs_per_100g=0.0,
+                protein_per_100g=0.0,
+                fat_per_100g=0.0,
+                serving_size_grams=1.0,
+            ),
+            "lactose-free milk": FatSecretFoodResult(
+                food_id="m-1",
+                description="lactose free milk",
+                calories_per_100g=48.0,
+                carbs_per_100g=4.9,
+                protein_per_100g=3.3,
+                fat_per_100g=1.6,
+                serving_size_grams=200.0,
+            ),
+            "coffee": FatSecretFoodResult(
+                food_id="c-1",
+                description="coffee",
+                calories_per_100g=1.0,
+                carbs_per_100g=0.0,
+                protein_per_100g=0.1,
+                fat_per_100g=0.0,
+                serving_size_grams=240.0,
+            ),
+            "butter": FatSecretFoodResult(
+                food_id="b-1",
+                description="butter",
+                calories_per_100g=717.0,
+                carbs_per_100g=0.1,
+                protein_per_100g=0.8,
+                fat_per_100g=81.0,
+                serving_size_grams=None,
+            ),
+            "egg": FatSecretFoodResult(
+                food_id="e-1",
+                description="egg",
+                calories_per_100g=143.0,
+                carbs_per_100g=0.7,
+                protein_per_100g=12.6,
+                fat_per_100g=9.5,
+                serving_size_grams=50.0,
+            ),
+            "whole wheat toast": FatSecretFoodResult(
+                food_id="t-1",
+                description="whole wheat toast",
+                calories_per_100g=265.0,
+                carbs_per_100g=49.0,
+                protein_per_100g=9.0,
+                fat_per_100g=3.2,
+                serving_size_grams=40.0,
+            ),
+        }
+        if normalized_name not in mapping:
+            raise AssertionError(f"unexpected lookup: {normalized_name}")
+        return mapping[normalized_name]
+
+    monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
+    monkeypatch.setattr("app.services.food_service.search_fatsecret_food_by_name", fake_fatsecret_search)
+
+    def fake_resolve_portion_grams(
+        db: Any,
+        food_name: str,
+        unit: str,
+        preferred_serving_grams: float | None = None,
+    ) -> float:
+        _ = db, preferred_serving_grams
+        food_name = str(food_name).lower()
+        unit = str(unit).lower()
+        if food_name == "butter" and unit == "serving":
+            return 108.0
+        return 50.0
+
+    monkeypatch.setattr("app.services.food_service.PortionResolverService.resolve_portion_grams", fake_resolve_portion_grams)
+
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "sweetener, lactose-free milk, café, manteca, scrambled eggs, whole wheat toast"},
+    )
+
+    assert response.status_code == 200
+    data: dict[str, Any] = response.json()
+
+    # Conservative defaults should avoid inflated values near 800+ kcal.
+    assert data["total_calories"] < 450.0
+    assert data["total_protein"] < 30.0
+    assert data["total_fat"] < 30.0

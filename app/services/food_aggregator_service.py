@@ -49,9 +49,9 @@ class FoodAggregatorService:
 
     def __init__(self, connectors: list[FoodConnector] | None = None) -> None:
         self.connectors = connectors or [
+            FatSecretConnector(),
             USDAConnector(),
             OpenFoodFactsConnector(),
-            FatSecretConnector(),
         ]
 
     async def search_food(self, query: str, db: Session | None = None) -> list[FoodNormalized]:
@@ -132,8 +132,10 @@ class FoodAggregatorService:
                     score -= 0.04
 
             if not has_brand_in_query:
-                if item.source == "usda":
+                if item.source == "fatsecret":
                     score += 0.08
+                elif item.source == "usda":
+                    score += 0.03
                 elif item.source == "openfoodfacts":
                     score -= 0.03
 

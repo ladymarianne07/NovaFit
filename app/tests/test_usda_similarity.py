@@ -80,3 +80,79 @@ def test_build_query_candidates_adds_fluid_variant_for_plain_milk() -> None:
 
     assert candidates[0] == "milk fluid"
     assert "milk" in candidates
+
+
+def test_rank_usda_results_prefers_whole_egg_over_egg_white_for_plain_egg_query() -> None:
+    foods = [
+        {
+            "description": "Eggs, Grade A, Large, egg white",
+            "dataType": "SR Legacy",
+            "foodNutrients": [],
+        },
+        {
+            "description": "Egg, whole, cooked, hard-boiled",
+            "dataType": "SR Legacy",
+            "foodNutrients": [],
+        },
+    ]
+
+    ranked = rank_usda_results("egg", foods)
+
+    assert ranked[0].description == "Egg, whole, cooked, hard-boiled"
+
+
+def test_rank_usda_results_avoids_fat_free_milk_when_query_not_explicitly_lean() -> None:
+    foods = [
+        {
+            "description": "Milk, lactose free, fat free (skim)",
+            "dataType": "Survey (FNDDS)",
+            "foodNutrients": [],
+        },
+        {
+            "description": "Milk, lactose free, reduced fat (2%)",
+            "dataType": "Survey (FNDDS)",
+            "foodNutrients": [],
+        },
+    ]
+
+    ranked = rank_usda_results("lactose-free milk", foods)
+
+    assert ranked[0].description == "Milk, lactose free, reduced fat (2%)"
+
+
+def test_rank_usda_results_penalizes_generic_branded_staple_labels() -> None:
+    foods = [
+        {
+            "description": "LACTOSE FREE MILK",
+            "dataType": "Branded",
+            "foodNutrients": [],
+        },
+        {
+            "description": "Milk, lactose free, reduced fat (2%)",
+            "dataType": "Survey (FNDDS)",
+            "foodNutrients": [],
+        },
+    ]
+
+    ranked = rank_usda_results("lactose-free milk", foods)
+
+    assert ranked[0].description == "Milk, lactose free, reduced fat (2%)"
+
+
+def test_rank_usda_results_prefers_reduced_fat_over_whole_for_plain_lactose_free_milk() -> None:
+    foods = [
+        {
+            "description": "Milk, lactose free, whole",
+            "dataType": "Survey (FNDDS)",
+            "foodNutrients": [],
+        },
+        {
+            "description": "Milk, lactose free, reduced fat (2%)",
+            "dataType": "Survey (FNDDS)",
+            "foodNutrients": [],
+        },
+    ]
+
+    ranked = rank_usda_results("lactose-free milk", foods)
+
+    assert ranked[0].description == "Milk, lactose free, reduced fat (2%)"

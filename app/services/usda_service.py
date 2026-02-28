@@ -55,6 +55,24 @@ QUERY_STOPWORDS = {
 
 COFFEE_PLAIN_TOKENS = {"coffee", "cafe", "café"}
 MILK_PLAIN_TOKENS = {"milk", "leche"}
+EGG_PLAIN_TOKENS = {"egg", "eggs", "huevo", "huevos"}
+EGG_WHITE_DESC_TOKENS = {"egg white", "egg whites", "white only", "albumen", "substitute"}
+EGG_WHOLE_DESC_TOKENS = {"egg, whole", "whole egg", "whole, cooked"}
+MILK_LEAN_DESC_TOKENS = {"fat free", "skim", "nonfat", "0%", "1%"}
+MILK_REDUCED_DESC_TOKENS = {"reduced fat", "2%", "semi-skim", "semidescremada", "semi descremada"}
+MILK_WHOLE_DESC_TOKENS = {"whole", "entera"}
+MILK_EXPLICIT_LEAN_QUERY_TOKENS = {
+    "fat free",
+    "skim",
+    "nonfat",
+    "descremada",
+    "desnatada",
+    "low fat",
+    "baja en grasa",
+    "1%",
+    "0%",
+}
+STAPLE_QUERY_TOKENS = {"milk", "leche", "egg", "eggs", "huevo", "huevos", "butter", "manteca", "toast", "tostada"}
 
 
 logger = logging.getLogger(__name__)
@@ -327,6 +345,24 @@ def _semantic_adjustment(normalized_name: str, description: str) -> float:
     if has_grain_token and not has_explicit_state and _has_any_token(desc, ADDED_FAT_TOKENS):
         return -5.0
 
+    # Plain egg queries should resolve to whole egg, not egg white/substitutes.
+    if _has_any_token(query, EGG_PLAIN_TOKENS):
+        query_mentions_white = "white" in query or "clara" in query
+        if not query_mentions_white and _has_any_token(desc, EGG_WHITE_DESC_TOKENS):
+            return -22.0
+        if not query_mentions_white and _has_any_token(desc, EGG_WHOLE_DESC_TOKENS):
+            return 10.0
+
+    # For milk queries without explicit lean intent, avoid fat-free/skim variants.
+    if "milk" in query or "leche" in query:
+        query_explicit_lean = _has_any_token(query, MILK_EXPLICIT_LEAN_QUERY_TOKENS)
+        if not query_explicit_lean and _has_any_token(desc, MILK_LEAN_DESC_TOKENS):
+            return -14.0
+        if not query_explicit_lean and _has_any_token(desc, MILK_REDUCED_DESC_TOKENS):
+            return 10.0
+        if not query_explicit_lean and _has_any_token(desc, MILK_WHOLE_DESC_TOKENS):
+            return 4.0
+
     query_tokens = [
         token
         for token in query.replace(",", " ").split()
@@ -348,6 +384,28 @@ def _semantic_adjustment(normalized_name: str, description: str) -> float:
     return 0.0
 
 
+def _brand_generic_penalty(normalized_name: str, description: str, category: str) -> float:
+    """Penalize branded package-like matches for staple generic queries."""
+    query = normalized_name.lower().strip()
+    desc = description.strip()
+    category_lowered = category.lower().strip()
+
+    if "branded" not in category_lowered:
+        return 0.0
+
+    # If query is clearly a staple and not a specific brand/product flavor, avoid generic branded labels.
+    if _has_any_token(query, STAPLE_QUERY_TOKENS):
+        penalty = 8.0
+
+        upper_like = desc.upper() == desc and len(desc.split()) <= 5 and "," not in desc
+        if upper_like:
+            penalty += 8.0
+
+        return -penalty
+
+    return 0.0
+
+
 def rank_usda_results(normalized_name: str, foods: list[dict[str, Any]]) -> list[RankedUSDAResult]:
     """Rank USDA candidates by weighted score = similarity + category priority."""
     ranked: list[RankedUSDAResult] = []
@@ -364,6 +422,7 @@ def rank_usda_results(normalized_name: str, foods: list[dict[str, Any]]) -> list
             + _category_priority_bonus(category)
             + _preparation_alignment_bonus(normalized_name, description)
             + _semantic_adjustment(normalized_name, description)
+            + _brand_generic_penalty(normalized_name, description, category)
         )
 
         ranked.append(
