@@ -129,7 +129,6 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
     try {
       const data = await routineAPI.getActive()
       setRoutine(data)
-      if (data.status === 'ready') setTopTab('view')
     } catch {
       // No active routine yet
     } finally {
