@@ -12,6 +12,7 @@ from ..db.database import get_database_session
 from ..db.models import User
 from ..dependencies import get_current_active_user
 from ..schemas.routine import (
+    RoutineAdvanceSessionRequest,
     RoutineEditRequest,
     RoutineGenerateRequest,
     RoutineLogSessionRequest,
@@ -158,6 +159,43 @@ async def get_active_routine(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve routine",
+        )
+
+
+# ── Advance session ───────────────────────────────────────────────────────────
+
+@router.post("/advance-session", response_model=UserRoutineResponse)
+async def advance_routine_session(
+    payload: RoutineAdvanceSessionRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_database_session),
+):
+    """Advance the routine to the next session (complete or skip the current one)."""
+    if payload.action not in ("complete", "skip"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="action must be 'complete' or 'skip'",
+        )
+    try:
+        user_data = current_user
+        weight_kg = float(getattr(user_data, "weight_kg", 0.0) or 0.0)
+
+        routine = RoutineService.advance_session(
+            db,
+            user_id=int(getattr(current_user, "id")),
+            action=payload.action,
+            weight_kg=weight_kg,
+        )
+        return routine
+
+    except RoutineNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to advance routine session",
         )
 
 

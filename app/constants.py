@@ -293,6 +293,8 @@ class RoutineConstants:
         "image/jpeg",
         "image/png",
         "image/webp",
+        "application/msword",                                                          # .doc
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",    # .docx
     }
 
     # Gemini timeout (larger files need more time)

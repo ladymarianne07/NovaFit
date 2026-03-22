@@ -499,6 +499,52 @@ class RoutineService:
         db.refresh(session)
         return session
 
+    # ── Advance session (complete or skip) ────────────────────────────────────
+
+    @classmethod
+    def advance_session(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        action: str,
+        weight_kg: float,
+    ) -> UserRoutine:
+        """Mark the current session as complete or skipped and advance the index.
+
+        - 'complete': logs the session (creates WorkoutSession + calorie entry) then advances
+        - 'skip': advances without logging calories
+        The index wraps around so the cycle repeats indefinitely.
+        """
+        routine = cls.get_active_routine(db, user_id=user_id)
+
+        routine_data = cast(Any, routine).routine_data or {}
+        sessions: list[dict[str, Any]] = routine_data.get("sessions", [])
+        if not sessions:
+            raise RoutineNotFoundError("Routine has no sessions to advance.")
+
+        current_index: int = int(cast(Any, routine).current_session_index or 0)
+        current_session = sessions[current_index % len(sessions)]
+
+        if action == "complete":
+            from datetime import date as date_type
+            cls.log_session(
+                db,
+                user_id=user_id,
+                session_id=str(current_session.get("id", "")),
+                session_date=date_type.today(),
+                skipped_exercise_ids=[],
+                weight_kg=weight_kg,
+            )
+
+        # Advance index (wraps around)
+        next_index = (current_index + 1) % len(sessions)
+        cast(Any, routine).current_session_index = next_index
+
+        db.commit()
+        db.refresh(routine)
+        return routine
+
     # ── Gemini calls ──────────────────────────────────────────────────────────
 
     @classmethod
@@ -922,6 +968,7 @@ class RoutineService:
         rd.health_analysis = None
         rd.intake_data = intake_data
         rd.error_message = None
+        rd.current_session_index = 0  # reset progress when a new routine is loaded
         return routine
 
 

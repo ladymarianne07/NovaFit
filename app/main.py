@@ -292,6 +292,8 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(nutrition.router)
     app.include_router(workout.router)
     app.include_router(routine.router)
+    app.include_router(workout.router, prefix="/api")
+    app.include_router(routine.router, prefix="/api")
     app.include_router(trainer.router)
     app.include_router(notifications.router)
     app.include_router(invite.router)

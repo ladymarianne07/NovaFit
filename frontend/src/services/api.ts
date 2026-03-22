@@ -576,6 +576,7 @@ export interface UserRoutineResponse {
   }
   health_analysis?: RoutineHealthAnalysis
   intake_data?: Record<string, unknown>
+  current_session_index: number
 }
 
 export interface RoutineIntakeData {
@@ -604,6 +605,10 @@ export interface RoutineLogSessionRequest {
   session_id: string
   session_date: string
   skipped_exercise_ids: string[]
+}
+
+export interface RoutineAdvanceSessionRequest {
+  action: 'complete' | 'skip'
 }
 
 export interface ConfirmMealsRequest {
@@ -646,6 +651,11 @@ export const routineAPI = {
 
   logSession: async (payload: RoutineLogSessionRequest): Promise<WorkoutSessionResponse> => {
     const response = await api.post('/v1/routines/log-session', payload)
+    return response.data
+  },
+
+  advanceSession: async (payload: RoutineAdvanceSessionRequest): Promise<UserRoutineResponse> => {
+    const response = await api.post('/v1/routines/advance-session', payload)
     return response.data
   },
 }

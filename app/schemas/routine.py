@@ -131,8 +131,17 @@ class UserRoutineResponse(BaseModel):
     health_analysis: dict[str, Any] | None = None
     intake_data: dict[str, Any] | None = None
     error_message: str | None = None
+    current_session_index: int = 0
 
     model_config = {"from_attributes": True}
+
+
+# ── Advance session ───────────────────────────────────────────────────────────
+
+class RoutineAdvanceSessionRequest(BaseModel):
+    """Request to advance the routine to the next session (complete or skip)."""
+
+    action: str = Field(..., description="'complete' | 'skip'")
 
 
 # ── Session log ───────────────────────────────────────────────────────────────

@@ -14,6 +14,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Check,
+  ChevronDown,
   Dumbbell,
   FileUp,
   Pencil,
@@ -25,12 +27,14 @@ import {
 } from 'lucide-react'
 // Plus kept for the "Crear / Reemplazar" trigger button
 import {
+  FitnessObjective,
   RoutineEditRequest,
   RoutineGenerateRequest,
   RoutineIntakeData,
   UserRoutineResponse,
   routineAPI,
 } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,13 +44,7 @@ interface RoutineModuleProps {
 
 type CreateMode = 'ai' | 'file'
 
-const ACCEPTED_MIME_TYPES = 'text/plain,application/pdf,image/jpeg,image/png,image/webp'
-
-const OBJECTIVE_OPTIONS = [
-  { value: 'fat_loss', label: 'Pérdida de grasa / definición' },
-  { value: 'body_recomp', label: 'Recomposición corporal' },
-  { value: 'muscle_gain', label: 'Ganancia muscular' },
-] as const
+const ACCEPTED_MIME_TYPES = 'text/plain,application/pdf,image/jpeg,image/png,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.doc,.docx'
 
 const FREQUENCY_OPTIONS = [
   { value: '2', label: '2 días por semana' },
@@ -82,15 +80,111 @@ const DEFAULT_INTAKE: RoutineIntakeData = {
 
 // Required fields that trigger the missing-data modal
 const REQUIRED_FIELDS: Array<keyof RoutineIntakeData> = [
-  'objective',
   'duration_months',
   'health_conditions',
   'injuries',
 ]
 
+// Map user's FitnessObjective → RoutineIntakeData objective (subset)
+const mapFitnessObjective = (obj?: FitnessObjective): RoutineIntakeData['objective'] => {
+  if (obj === 'fat_loss') return 'fat_loss'
+  if (obj === 'muscle_gain') return 'muscle_gain'
+  return 'body_recomp'
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+// ── RoutineSelect — portal-based custom dropdown ──────────────────────────────
+
+interface RoutineSelectOption { value: string; label: string }
+
+interface RoutineSelectProps {
+  label: string
+  required?: boolean
+  value: string
+  onChange: (value: string) => void
+  options: RoutineSelectOption[]
+  disabled?: boolean
+}
+
+const RoutineSelect: React.FC<RoutineSelectProps> = ({ label, required, value, onChange, options, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({})
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [isOpen])
+
+  const handleOpen = () => {
+    if (disabled) return
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPanelStyle({
+        position: 'fixed',
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: rect.width,
+        zIndex: 1300,
+      })
+    }
+    setIsOpen((prev) => !prev)
+  }
+
+  return (
+    <div className="routine-intake-field">
+      <label className="routine-intake-label">
+        {label}{required && <span className="routine-required"> *</span>}
+      </label>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="routine-intake-select routine-select-trigger"
+        onClick={handleOpen}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span>{selectedLabel}</span>
+        <ChevronDown size={15} style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s ease' }} />
+      </button>
+      {isOpen && createPortal(
+        <div className="custom-select-panel" style={panelStyle} role="listbox">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="option"
+              aria-selected={opt.value === value}
+              className={`custom-select-option ${opt.value === value ? 'selected' : ''}`}
+              onClick={() => { onChange(opt.value); setIsOpen(false) }}
+            >
+              <span className="custom-select-option-text">
+                <span className="custom-select-option-label">{opt.label}</span>
+              </span>
+              {opt.value === value && <Check size={15} className="custom-select-check" />}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
+  const { user } = useAuth()
+
   // Global state
   const [routine, setRoutine] = useState<UserRoutineResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -143,6 +237,7 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
   const openCreateModal = () => {
     setCreateError('')
     setCreateMode('ai')
+    setIntake((prev) => ({ ...prev, objective: mapFitnessObjective(user?.objective) }))
     setShowCreateModal(true)
   }
 
@@ -162,7 +257,6 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
 
   const getMissingRequired = (): string[] => {
     const labels: Record<string, string> = {
-      objective: 'Objetivo principal',
       duration_months: 'Duración en meses',
       health_conditions: 'Condiciones de salud',
       injuries: 'Lesiones actuales o recientes',
@@ -487,25 +581,6 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
 
                   <div className="routine-intake-field">
                     <label className="routine-intake-label">
-                      Objetivo principal <span className="routine-required">*</span>
-                    </label>
-                    <div className="routine-objective-grid">
-                      {OBJECTIVE_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          className={`routine-objective-btn ${intake.objective === opt.value ? 'active' : ''}`}
-                          onClick={() => updateIntake('objective', opt.value)}
-                          disabled={isGenerating}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="routine-intake-field">
-                    <label className="routine-intake-label">
                       Condiciones de salud, enfermedades o patologías{' '}
                       <span className="routine-required">*</span>
                     </label>
@@ -565,48 +640,30 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                   </div>
 
                   <div className="routine-intake-row">
-                    <div className="routine-intake-field">
-                      <label className="routine-intake-label">Frecuencia</label>
-                      <select
-                        className="routine-intake-select"
-                        value={intake.frequency_days}
-                        onChange={(e) => updateIntake('frequency_days', e.target.value as RoutineIntakeData['frequency_days'])}
-                        disabled={isGenerating}
-                      >
-                        {FREQUENCY_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="routine-intake-field">
-                      <label className="routine-intake-label">Experiencia</label>
-                      <select
-                        className="routine-intake-select"
-                        value={intake.experience_level}
-                        onChange={(e) => updateIntake('experience_level', e.target.value as RoutineIntakeData['experience_level'])}
-                        disabled={isGenerating}
-                      >
-                        {EXPERIENCE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <RoutineSelect
+                      label="Frecuencia"
+                      value={intake.frequency_days}
+                      onChange={(v) => updateIntake('frequency_days', v as RoutineIntakeData['frequency_days'])}
+                      options={FREQUENCY_OPTIONS as unknown as RoutineSelectOption[]}
+                      disabled={isGenerating}
+                    />
+                    <RoutineSelect
+                      label="Experiencia"
+                      value={intake.experience_level}
+                      onChange={(v) => updateIntake('experience_level', v as RoutineIntakeData['experience_level'])}
+                      options={EXPERIENCE_OPTIONS as unknown as RoutineSelectOption[]}
+                      disabled={isGenerating}
+                    />
                   </div>
 
                   <div className="routine-intake-row">
-                    <div className="routine-intake-field">
-                      <label className="routine-intake-label">Equipamiento</label>
-                      <select
-                        className="routine-intake-select"
-                        value={intake.equipment}
-                        onChange={(e) => updateIntake('equipment', e.target.value as RoutineIntakeData['equipment'])}
-                        disabled={isGenerating}
-                      >
-                        {EQUIPMENT_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <RoutineSelect
+                      label="Equipamiento"
+                      value={intake.equipment}
+                      onChange={(v) => updateIntake('equipment', v as RoutineIntakeData['equipment'])}
+                      options={EQUIPMENT_OPTIONS as unknown as RoutineSelectOption[]}
+                      disabled={isGenerating}
+                    />
                     <div className="routine-intake-field">
                       <label className="routine-intake-label">
                         Duración del plan <span className="routine-required">*</span>
@@ -679,7 +736,6 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                     Para que la IA pueda armar tu rutina correctamente, el archivo debe incluir al menos:
                   </p>
                   <ul className="routine-disclaimer-list">
-                    <li>🎯 <strong>Objetivo</strong> (pérdida de grasa, recomposición o ganancia muscular)</li>
                     <li>🔥 <strong>Calentamiento</strong> y movilidad articular</li>
                     <li>💪 <strong>Rutina de ejercicios</strong> organizados por día o bloque</li>
                     <li>📊 <strong>Series y repeticiones</strong> por ejercicio</li>
@@ -722,7 +778,7 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                       <p className="routine-dropzone-text">
                         {isDragging ? 'Soltá el archivo aquí' : 'Arrastrá tu rutina o hacé click para seleccionar'}
                       </p>
-                      <p className="routine-dropzone-hint">PDF · Imagen (JPG, PNG) · Texto (.txt)</p>
+                      <p className="routine-dropzone-hint">PDF · Word (.doc, .docx) · Imagen (JPG, PNG) · Texto (.txt)</p>
                     </div>
                   )}
                 </div>

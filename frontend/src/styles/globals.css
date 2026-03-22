@@ -4194,10 +4194,6 @@
   transition: border-color 0.25s ease, background 0.25s ease;
 }
 
-.workout-proximo-card.completed {
-  border-color: rgba(0, 229, 255, 0.45);
-  background: rgba(0, 229, 255, 0.05);
-}
 
 .workout-proximo-top {
   display: flex;
@@ -4277,78 +4273,51 @@
   flex-shrink: 0;
 }
 
-/* ── Toggle row ─────────────────────────────── */
-.workout-toggle-row {
+/* ── Advance row (Completar / Saltar) ────────── */
+.workout-advance-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.workout-advance-btn {
+  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.7rem 0.85rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.5rem;
   border-radius: 0.75rem;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.workout-toggle-row.done {
-  background: rgba(0, 229, 255, 0.06);
-  border-color: rgba(0, 229, 255, 0.28);
-}
-
-.workout-toggle-label {
-  margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
-  transition: color 0.2s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
 }
 
-.workout-toggle-row.done .workout-toggle-label {
+.workout-advance-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workout-advance-btn.complete {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: rgba(0, 229, 255, 0.45);
   color: var(--theme-accent);
 }
 
-.workout-toggle-sub {
-  margin: 0.15rem 0 0;
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.42);
-  transition: color 0.2s ease;
+.workout-advance-btn.complete:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.24);
 }
 
-.workout-toggle-row.done .workout-toggle-sub {
-  color: rgba(0, 229, 255, 0.65);
+.workout-advance-btn.skip {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.55);
 }
 
-.workout-toggle-track {
-  flex-shrink: 0;
-  width: 38px;
-  height: 22px;
-  border-radius: 99px;
+.workout-advance-btn.skip:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  position: relative;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.workout-toggle-track.on {
-  background: rgba(0, 229, 255, 0.25);
-  border-color: var(--theme-accent);
-}
-
-.workout-toggle-thumb {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.5);
-  top: 3px;
-  left: 3px;
-  transition: left 0.2s ease, background 0.2s ease;
-}
-
-.workout-toggle-track.on .workout-toggle-thumb {
-  left: 19px;
-  background: var(--theme-accent);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* ── Empty state card ───────────────────────── */
@@ -4690,10 +4659,6 @@
   border-color: rgba(0, 115, 180, 0.25);
 }
 
-[data-theme="light"] .workout-proximo-card.completed {
-  background: rgba(0, 115, 180, 0.06);
-  border-color: rgba(0, 115, 180, 0.4);
-}
 
 [data-theme="light"] .workout-proximo-section-label {
   color: rgba(10, 26, 30, 0.4);
@@ -4713,22 +4678,15 @@
   color: rgba(10, 26, 30, 0.6);
 }
 
-[data-theme="light"] .workout-toggle-row {
-  background: rgba(10, 26, 30, 0.03);
-  border-color: rgba(10, 26, 30, 0.1);
+[data-theme="light"] .workout-advance-btn.skip {
+  background: rgba(10, 26, 30, 0.04);
+  border-color: rgba(10, 26, 30, 0.14);
+  color: rgba(10, 26, 30, 0.5);
 }
 
-[data-theme="light"] .workout-toggle-label {
-  color: rgba(10, 26, 30, 0.78);
-}
-
-[data-theme="light"] .workout-toggle-sub {
-  color: rgba(10, 26, 30, 0.42);
-}
-
-[data-theme="light"] .workout-toggle-track {
-  background: rgba(10, 26, 30, 0.1);
-  border-color: rgba(10, 26, 30, 0.2);
+[data-theme="light"] .workout-advance-btn.skip:hover:not(:disabled) {
+  background: rgba(10, 26, 30, 0.08);
+  color: rgba(10, 26, 30, 0.75);
 }
 
 [data-theme="light"] .workout-empty-card {
@@ -7644,6 +7602,7 @@
 .routine-create-modes {
   display: flex;
   gap: 0.5rem;
+  padding: 0.85rem 1.25rem 0;
 }
 
 .routine-mode-btn {
@@ -7681,6 +7640,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  padding: 0.85rem 1.25rem 1.25rem;
 }
 
 /* ── Intake form ────────────────────────────── */
@@ -7703,6 +7663,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  min-width: 0;
 }
 
 .routine-intake-label {
@@ -7772,9 +7733,19 @@
   cursor: not-allowed;
 }
 
+/* Button trigger for RoutineSelect (replaces native <select>) */
+.routine-select-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
 .routine-intake-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
@@ -8463,9 +8434,10 @@
   border: 1px solid rgba(0, 229, 255, 0.18);
   border-radius: 16px;
   width: 100%;
-  max-width: 560px;
+  max-width: 480px;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;

@@ -29,6 +29,7 @@ REQUIRED_ROUTINE_COLUMNS: dict[str, str] = {
     "source_type": "VARCHAR(20) DEFAULT 'file'",
     "health_analysis": "TEXT",
     "intake_data": "TEXT",
+    "current_session_index": "INTEGER DEFAULT 0",
 }
 
 

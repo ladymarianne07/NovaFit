@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Clock, Dumbbell, Flame, ListChecks, Sparkles, Trash2 } from 'lucide-react'
+import { Check, Clock, Dumbbell, Flame, ListChecks, SkipForward, Sparkles, Trash2 } from 'lucide-react'
 import RoutineModule from './RoutineModule'
 import {
   routineAPI,
@@ -404,16 +404,11 @@ const formatIntensityLabel = (intensity?: string | null) => {
   return 'Media'
 }
 
-const DAY_NAMES_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-
-const findTodaySession = (routine: UserRoutineResponse | null): RoutineSession | null => {
-  if (!routine?.routine_data?.sessions?.length) return null
-  const today = DAY_NAMES_ES[new Date().getDay()]
-  return (
-    routine.routine_data.sessions.find((s) =>
-      s.day_label?.toLowerCase().includes(today.toLowerCase()),
-    ) ?? routine.routine_data.sessions[0]
-  )
+const getCurrentSession = (routine: UserRoutineResponse | null): RoutineSession | null => {
+  const sessions = routine?.routine_data?.sessions
+  if (!sessions?.length) return null
+  const index = (routine?.current_session_index ?? 0) % sessions.length
+  return sessions[index]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -431,8 +426,9 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
   // ── Tab state ────────────────────────────────────────────────────────────
   const [moduleTab, setModuleTab] = useState<'sessions' | 'routine'>('sessions')
 
-  // ── Routine toggle ───────────────────────────────────────────────────────
-  const [routineCompleted, setRoutineCompleted] = useState(false)
+  // ── Advance state ────────────────────────────────────────────────────────
+  const [isAdvancing, setIsAdvancing] = useState(false)
+  const [advanceError, setAdvanceError] = useState('')
 
   // ── AI flow state ────────────────────────────────────────────────────────
   const [showAiForm, setShowAiForm] = useState(false)
@@ -446,11 +442,11 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
 
   // ── Derived values ───────────────────────────────────────────────────────
   const hasActiveRoutine = routine?.status === 'ready'
-  const todaySession = useMemo(() => findTodaySession(routine), [routine])
-  const routineKcal = Math.round(todaySession?.estimated_calories_per_session ?? 0)
+  const currentSession = useMemo(() => getCurrentSession(routine), [routine])
+  const routineKcal = Math.round(currentSession?.estimated_calories_per_session ?? 0)
   const sessionDuration = (routine?.intake_data as Record<string, unknown>)?.session_duration_minutes as number ?? 60
 
-  const exerciseKcal = (dailyEnergy?.exercise_kcal_est ?? 0) + (routineCompleted ? routineKcal : 0)
+  const exerciseKcal = dailyEnergy?.exercise_kcal_est ?? 0
   const intakeKcal = dailyEnergy?.intake_kcal ?? 0
   const netKcal = Math.round(intakeKcal - exerciseKcal)
   const showCalories = intakeKcal > 0 || exerciseKcal > 0
@@ -487,6 +483,24 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
     }
   }, [fetchWorkoutData])
 
+  // ── Advance session ───────────────────────────────────────────────────────
+  const handleAdvance = async (action: 'complete' | 'skip') => {
+    setAdvanceError('')
+    setIsAdvancing(true)
+    try {
+      const updated = await routineAPI.advanceSession({ action })
+      setRoutine(updated)
+      if (action === 'complete') {
+        await fetchWorkoutData()
+        window.dispatchEvent(new Event('workout:updated'))
+      }
+    } catch {
+      setAdvanceError('No se pudo registrar la acción. Intentá de nuevo.')
+    } finally {
+      setIsAdvancing(false)
+    }
+  }
+
   // ── AI form ──────────────────────────────────────────────────────────────
   const parsedPreview = useMemo(() => {
     if (!aiInput.trim()) return []
@@ -494,16 +508,15 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
   }, [aiInput])
 
   const handleAiBtnClick = () => {
-    if (hasActiveRoutine && !routineCompleted) {
+    if (hasActiveRoutine) {
       setShowRoutineModal(true)
     } else {
       setShowAiForm(true)
     }
   }
 
-  const handleRoutineModalOption = (replaces: boolean) => {
+  const handleRoutineModalOption = () => {
     setShowRoutineModal(false)
-    if (replaces) setRoutineCompleted(true)
     setShowAiForm(true)
   }
 
@@ -645,20 +658,16 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
           ) : (
             <>
               {/* ── Próximo entreno / Empty state ── */}
-              {hasActiveRoutine && todaySession ? (
-                <div className={`workout-proximo-card${routineCompleted ? ' completed' : ''}`}>
+              {hasActiveRoutine && currentSession ? (
+                <div className="workout-proximo-card">
                   <div className="workout-proximo-top">
                     <div className="workout-proximo-info">
-                      <p className="workout-proximo-section-label">Mi Rutina</p>
-                      <p className="workout-proximo-title">{todaySession.title}</p>
+                      <p className="workout-proximo-section-label">Próximo entrenamiento</p>
+                      <p className="workout-proximo-title">{currentSession.title}</p>
                       <p className="workout-proximo-sub">
-                        {todaySession.exercises?.length ?? 0} ejercicios
+                        {currentSession.exercises?.length ?? 0} ejercicios
                       </p>
                     </div>
-                    <span className={`workout-day-tag${routineCompleted ? ' done' : ''}`}>
-                      {routineCompleted ? '✓ ' : ''}
-                      {todaySession.day_label?.split('·')[0]?.trim() ?? 'HOY'}
-                    </span>
                   </div>
 
                   <div className="workout-proximo-pills">
@@ -668,31 +677,34 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
                     </span>
                     <span className="workout-proximo-pill">
                       <Flame size={9} />
-                      {routineKcal} kcal
+                      {routineKcal} kcal est.
                     </span>
-                    <span className="workout-proximo-pill">Media</span>
                   </div>
 
-                  <div className={`workout-toggle-row${routineCompleted ? ' done' : ''}`}>
-                    <div>
-                      <p className="workout-toggle-label">
-                        {routineCompleted ? 'Completado' : 'Marcar como completado'}
-                      </p>
-                      <p className="workout-toggle-sub">
-                        {routineCompleted
-                          ? `-${routineKcal} kcal aplicadas`
-                          : `Resta ${routineKcal} kcal del día`}
-                      </p>
-                    </div>
+                  {advanceError && (
+                    <p className="workout-form-error" role="alert">{advanceError}</p>
+                  )}
+
+                  <div className="workout-advance-row">
                     <button
                       type="button"
-                      role="switch"
-                      aria-checked={routineCompleted}
-                      className={`workout-toggle-track${routineCompleted ? ' on' : ''}`}
-                      onClick={() => setRoutineCompleted((c) => !c)}
-                      aria-label="Marcar rutina como completada"
+                      className="workout-advance-btn complete"
+                      onClick={() => handleAdvance('complete')}
+                      disabled={isAdvancing}
+                      aria-label="Marcar entrenamiento como completado"
                     >
-                      <span className="workout-toggle-thumb" />
+                      <Check size={15} />
+                      {isAdvancing ? 'Guardando...' : 'Completar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="workout-advance-btn skip"
+                      onClick={() => handleAdvance('skip')}
+                      disabled={isAdvancing}
+                      aria-label="Saltar este entrenamiento"
+                    >
+                      <SkipForward size={15} />
+                      Saltar
                     </button>
                   </div>
                 </div>
@@ -712,55 +724,36 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
                 <div className="workout-historial-card">
                   {listError && <p className="workout-form-error">{listError}</p>}
 
-                  {sessions.length === 0 && !routineCompleted ? (
+                  {sessions.length === 0 ? (
                     <p className="workout-historial-empty">Sin entrenamientos registrados hoy</p>
                   ) : (
-                    <>
-                      {/* Routine completed synthetic item */}
-                      {routineCompleted && todaySession && (
-                        <div className="workout-historial-item">
-                          <div className="workout-historial-info">
-                            <p className="workout-historial-name">
-                              {todaySession.title}
-                              <span className="workout-tag-rutina">Rutina</span>
-                            </p>
-                            <p className="workout-historial-meta">
-                              {sessionDuration} min · completado
-                            </p>
-                          </div>
-                          <span className="workout-historial-kcal">-{routineKcal} kcal</span>
+                    sessions.map((session) => (
+                      <div key={session.id} className="workout-historial-item">
+                        <div className="workout-historial-info">
+                          <p className="workout-historial-name">
+                            Entreno #{session.id}
+                            <span className="workout-tag-ia">IA</span>
+                          </p>
+                          <p className="workout-historial-meta">
+                            {session.blocks.reduce((sum, b) => sum + b.duration_minutes, 0)} min
+                          </p>
                         </div>
-                      )}
-
-                      {/* AI sessions */}
-                      {sessions.map((session) => (
-                        <div key={session.id} className="workout-historial-item">
-                          <div className="workout-historial-info">
-                            <p className="workout-historial-name">
-                              Entreno #{session.id}
-                              <span className="workout-tag-ia">IA</span>
-                            </p>
-                            <p className="workout-historial-meta">
-                              {session.blocks.reduce((sum, b) => sum + b.duration_minutes, 0)} min
-                            </p>
-                          </div>
-                          <div className="workout-historial-right">
-                            <span className="workout-historial-kcal">
-                              -{Math.round(session.total_kcal_est ?? 0)} kcal
-                            </span>
-                            <button
-                              type="button"
-                              className="workout-historial-delete"
-                              onClick={() => handleDeleteSession(session.id)}
-                              disabled={deletingSessionId === session.id}
-                              aria-label="Eliminar entrenamiento"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
+                        <div className="workout-historial-right">
+                          <span className="workout-historial-kcal">
+                            -{Math.round(session.total_kcal_est ?? 0)} kcal
+                          </span>
+                          <button
+                            type="button"
+                            className="workout-historial-delete"
+                            onClick={() => handleDeleteSession(session.id)}
+                            disabled={deletingSessionId === session.id}
+                            aria-label="Eliminar entrenamiento"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
-                      ))}
-                    </>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
@@ -792,7 +785,7 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
             </>
           )}
 
-          {/* ── Routine day modal (bottom sheet) ── */}
+          {/* ── Entreno extra modal (bottom sheet) ── */}
           {showRoutineModal && (
             <div
               className="workout-ia-overlay"
@@ -803,29 +796,19 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
             >
               <div className="workout-ia-sheet" onClick={(e) => e.stopPropagation()}>
                 <div className="workout-ia-handle" />
-                <p className="workout-ia-title">¿Este es tu entreno del día?</p>
+                <p className="workout-ia-title">¿Registrar entreno extra?</p>
                 <p className="workout-ia-sub">
-                  Tenés "{todaySession?.title ?? 'tu sesión'}" programado para hoy. Si este entreno
-                  reemplaza al de la rutina, no se contarán dos veces las calorías.
+                  Ya tenés "{currentSession?.title ?? 'tu sesión'}" como próximo en tu rutina.
+                  ¿Querés registrar un entreno adicional de hoy?
                 </p>
                 <button
                   type="button"
                   className="workout-ia-option"
-                  onClick={() => handleRoutineModalOption(true)}
+                  onClick={handleRoutineModalOption}
                 >
-                  <p className="workout-ia-option-title">✓ Sí, reemplaza mi entreno de hoy</p>
+                  <p className="workout-ia-option-title">+ Sí, registrar entreno extra</p>
                   <p className="workout-ia-option-sub">
-                    Se marca "{todaySession?.title}" como completado automáticamente
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  className="workout-ia-option"
-                  onClick={() => handleRoutineModalOption(false)}
-                >
-                  <p className="workout-ia-option-title">+ No, es un entreno extra</p>
-                  <p className="workout-ia-option-sub">
-                    Se registra aparte y las calorías se suman por separado
+                    Las calorías se suman aparte de las de la rutina
                   </p>
                 </button>
                 <button
