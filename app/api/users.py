@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ..dependencies import get_user_service, get_biometric_service, get_skinfold_service, get_current_active_user
-from ..schemas.user import UserResponse, UserUpdate, UserBiometricsUpdate, FitnessObjective
+from ..dependencies import get_user_service, get_biometric_service, get_skinfold_service, get_current_active_user, get_notification_service
+from ..services.notification_service import NotificationService
+from ..schemas.user import UserResponse, UserUpdate, UserBiometricsUpdate, FitnessObjective, Gender, ActivityLevel
 from ..schemas.progress import ProgressEvaluationResponse, ProgressEvaluationRequest, ProgressTimelineResponse
 from ..schemas.skinfold import (
     SkinfoldCalculationRequest,
@@ -32,6 +33,17 @@ class ObjectiveUpdate(BaseModel):
         le=3,
         description="Aggressiveness level (1=conservative, 2=moderate, 3=aggressive)"
     )
+
+
+class EnableSelfUseRequest(BaseModel):
+    """Biometric data for a trainer who decides to also use the app for themselves."""
+    age: int = Field(..., ge=13, le=120)
+    gender: Gender
+    weight: float = Field(..., ge=30, le=300)
+    height: float = Field(..., ge=100, le=250)
+    activity_level: ActivityLevel
+    objective: Optional[FitnessObjective] = None
+    aggressiveness_level: Optional[int] = Field(None, ge=1, le=3)
 
 
 class NutritionTargetsUpdate(BaseModel):
@@ -108,28 +120,47 @@ async def update_current_user_profile(
 async def update_user_biometrics(
     biometric_update: UserBiometricsUpdate,
     current_user: User = Depends(get_current_active_user),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Update user's biometric data with automatic BMR and TDEE recalculation
-    
+
     When any biometric field (weight, height, age, gender, activity_level) is updated,
     the system automatically recalculates:
     - BMR (Basal Metabolic Rate)
     - Daily Caloric Expenditure (TDEE)
-    
+
     This ensures the user's caloric calculations are always up-to-date.
     """
     try:
         # Update biometric data with automatic recalculation
         updated_user = user_service.update_user_biometrics(current_user, biometric_update)
-        
+        notification_service.notify_trainer_of_student_edit(current_user, "biometrics")
         return updated_user
-        
+
     except BiometricValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Biometric validation failed: {e.errors}"
         )
+
+
+@router.post("/me/enable-self-use", response_model=UserResponse)
+async def enable_trainer_self_use(
+    data: EnableSelfUseRequest,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service),
+):
+    """Allow a trainer to enable personal app usage after initial registration.
+
+    Sets uses_app_for_self=True and initializes the trainer's biometric profile,
+    unlocking the full dashboard (nutrition, training, progress tabs).
+    """
+    if current_user.role != "trainer":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only trainers can use this endpoint")
+    if current_user.uses_app_for_self:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Self-use is already enabled")
+    return user_service.enable_trainer_self_use(current_user, data)
 
 
 @router.post("/me/recalculate", response_model=UserResponse)
@@ -168,12 +199,13 @@ async def recalculate_user_metrics(
 async def update_user_objective(
     objective_data: ObjectiveUpdate,
     current_user: User = Depends(get_current_active_user),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Update user's fitness objective and recalculate calorie/macro targets
-    
-    This endpoint updates the user's fitness objective (maintenance, fat_loss, muscle_gain, 
-    body_recomposition, performance) and an optional aggressiveness level. The system 
+
+    This endpoint updates the user's fitness objective (maintenance, fat_loss, muscle_gain,
+    body_recomposition, performance) and an optional aggressiveness level. The system
     automatically recalculates:
     - Target daily calories (based on objective and TDEE)
     - Protein, fat, and carbohydrate targets (in grams)
@@ -184,9 +216,9 @@ async def update_user_objective(
             objective_data.objective.value,
             objective_data.aggressiveness_level
         )
-        
+        notification_service.notify_trainer_of_student_edit(current_user, "objective")
         return updated_user
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -198,7 +230,8 @@ async def update_user_objective(
 async def update_user_nutrition_targets(
     nutrition_targets: NutritionTargetsUpdate,
     current_user: User = Depends(get_current_active_user),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ):
     """Update custom daily calories and macro percentages for the current user."""
     try:
@@ -221,6 +254,7 @@ async def update_user_nutrition_targets(
             protein_target_percent=nutrition_targets.protein_target_percent,
             fat_target_percent=nutrition_targets.fat_target_percent,
         )
+        notification_service.notify_trainer_of_student_edit(current_user, "nutrition_targets")
         return updated_user
 
     except ValueError as e:

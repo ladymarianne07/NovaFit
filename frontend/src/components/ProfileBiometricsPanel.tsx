@@ -1,20 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
   Calculator,
   CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clipboard,
   Flame,
+  Link2,
   PieChart,
+  RefreshCw,
   Ruler,
   Save,
   Scale,
   Target,
+  ToggleLeft,
   UserRound,
 } from 'lucide-react'
-import { FitnessObjective, User, usersAPI, SkinfoldCalculationResult, SkinfoldValues } from '../services/api'
+import { EnableSelfUseRequest, FitnessObjective, User, usersAPI, SkinfoldCalculationResult, SkinfoldValues, trainerAPI, inviteAPI, TrainerInviteResponse } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme, AppTheme } from '../contexts/ThemeContext'
 import { useToast } from '../contexts/ToastContext'
 import CustomSelect from './UI/CustomSelect'
 
@@ -33,6 +39,14 @@ const SITES: Array<{ key: SiteKey; label: string; helper: string }> = [
   { key: 'abdomen_mm', label: 'Abdomen', helper: 'A 2 cm del ombligo, pliegue vertical.' },
   { key: 'suprailiac_mm', label: 'Suprailíaco', helper: 'Encima de la cresta ilíaca, diagonal.' },
   { key: 'thigh_mm', label: 'Muslo', helper: 'Cara anterior, mitad entre cadera y rodilla.' },
+]
+
+const ACTIVITY_LEVEL_OPTIONS = [
+  { value: '1.20', label: 'Sedentario', desc: 'Poco o nada de ejercicio' },
+  { value: '1.35', label: 'Ligeramente activo', desc: 'Ejercicio ligero 1-3 días/semana' },
+  { value: '1.50', label: 'Moderadamente activo', desc: 'Ejercicio moderado 3-5 días/semana' },
+  { value: '1.65', label: 'Activo', desc: 'Ejercicio intenso 6-7 días/semana' },
+  { value: '1.80', label: 'Muy activo', desc: 'Ejercicio muy intenso o trabajo físico' },
 ]
 
 const OBJECTIVE_OPTIONS: Array<{ value: FitnessObjective; label: string }> = [
@@ -57,7 +71,8 @@ const parseOptionalNumber = (value: string): number | undefined => {
 }
 
 const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user }) => {
-  const { updateBiometrics, updateObjective, updateNutritionTargets } = useAuth()
+  const { updateBiometrics, updateObjective, updateNutritionTargets, enableSelfUse } = useAuth()
+  const { theme, setTheme } = useTheme()
   const { showError, showSuccess } = useToast()
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('personal')
@@ -84,6 +99,28 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
     suprailiac_mm: ['', '', ''],
     thigh_mm: ['', '', ''],
   })
+
+  const isTrainerNoSelf = user.role === 'trainer' && !user.uses_app_for_self
+
+  // Enable-self-use form state (trainer only)
+  const [selfUseToggle, setSelfUseToggle] = useState(false)
+  const [enableAgeInput, setEnableAgeInput] = useState('')
+  const [enableSexInput, setEnableSexInput] = useState<'male' | 'female'>('male')
+  const [enableWeightInput, setEnableWeightInput] = useState('')
+  const [enableHeightInput, setEnableHeightInput] = useState('')
+  const [enableActivityInput, setEnableActivityInput] = useState('1.50')
+  const [enableObjectiveInput, setEnableObjectiveInput] = useState<FitnessObjective>('maintenance')
+  const [enableIntensityInput, setEnableIntensityInput] = useState<number>(2)
+  const [isSavingEnableSelfUse, setIsSavingEnableSelfUse] = useState(false)
+
+  // Invite code state (trainer)
+  const [invite, setInvite] = useState<TrainerInviteResponse | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
+
+  // Accept invite state (student)
+  const [inviteCodeInput, setInviteCodeInput] = useState('')
+  const [isAcceptingInvite, setIsAcceptingInvite] = useState(false)
 
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isSavingNutrition, setIsSavingNutrition] = useState(false)
@@ -403,6 +440,107 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
     }
   }
 
+  const handleEnableSelfUse = async () => {
+    const age = Number(enableAgeInput)
+    const weight = Number(enableWeightInput)
+    const height = Number(enableHeightInput)
+
+    if (!enableAgeInput || !enableWeightInput || !enableHeightInput) {
+      showError('Edad, peso y altura son obligatorios.', 'Completa tus datos personales')
+      return
+    }
+
+    if (Number.isNaN(age) || age < 1 || age > 120) {
+      showError('La edad debe estar entre 1 y 120 años.', 'Edad inválida')
+      return
+    }
+
+    if (Number.isNaN(weight) || weight < 20 || weight > 300) {
+      showError('El peso debe estar entre 20 y 300 kg.', 'Peso inválido')
+      return
+    }
+
+    if (Number.isNaN(height) || height < 100 || height > 250) {
+      showError('La altura debe estar entre 100 y 250 cm.', 'Altura inválida')
+      return
+    }
+
+    const payload: EnableSelfUseRequest = {
+      age,
+      gender: enableSexInput,
+      weight,
+      height,
+      activity_level: parseFloat(enableActivityInput),
+      objective: enableObjectiveInput,
+      aggressiveness_level: enableIntensityInput,
+    }
+
+    setIsSavingEnableSelfUse(true)
+    try {
+      await enableSelfUse(payload)
+      showSuccess('Seguimiento personal activado', 'Ya podés acceder a todas las funciones de la app')
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'No se pudo activar el seguimiento personal.'
+      showError(String(detail), 'Error al guardar')
+    } finally {
+      setIsSavingEnableSelfUse(false)
+    }
+  }
+
+  const handleLoadInvite = async () => {
+    setInviteLoading(true)
+    try {
+      const existing = await trainerAPI.getCurrentInvite()
+      setInvite(existing)
+    } catch {
+      try {
+        const newInvite = await trainerAPI.generateInvite()
+        setInvite(newInvite)
+      } catch (err: any) {
+        showError(err?.response?.data?.detail || 'No se pudo obtener el código.', 'Error')
+      }
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleGenerateInvite = async () => {
+    setInviteLoading(true)
+    try {
+      const newInvite = await trainerAPI.generateInvite()
+      setInvite(newInvite)
+      showSuccess('Código generado', 'El nuevo código es válido por 7 días')
+    } catch (err: any) {
+      showError(err?.response?.data?.detail || 'No se pudo generar el código.', 'Error')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleCopyCode = () => {
+    if (!invite) return
+    navigator.clipboard.writeText(invite.code)
+    setInviteCopied(true)
+    setTimeout(() => setInviteCopied(false), 2000)
+  }
+
+  const handleAcceptInvite = async () => {
+    if (!inviteCodeInput.trim()) {
+      showError('Ingresá el código de tu entrenador.', 'Código vacío')
+      return
+    }
+    setIsAcceptingInvite(true)
+    try {
+      await inviteAPI.acceptInvite(inviteCodeInput.trim())
+      showSuccess('¡Vinculado!', 'Tu entrenador ya puede ver tu progreso')
+      setInviteCodeInput('')
+    } catch (err: any) {
+      showError(err?.response?.data?.detail || 'Código inválido o expirado.', 'Error')
+    } finally {
+      setIsAcceptingInvite(false)
+    }
+  }
+
   const handleSkinfoldTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     skinfoldTouchStartX.current = event.touches[0]?.clientX ?? null
   }
@@ -438,29 +576,149 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
           aria-selected={activeSection === 'personal'}
           onClick={() => setActiveSection('personal')}
         >
-          <UserRound size={16} /> Datos personales
+          <UserRound size={20} />
+          <span>Datos</span>
         </button>
-        <button
-          type="button"
-          className={`profile-tab profile-tab-nutrition ${activeSection === 'nutrition' ? 'active' : ''}`}
-          role="tab"
-          aria-selected={activeSection === 'nutrition'}
-          onClick={() => setActiveSection('nutrition')}
-        >
-          <PieChart size={16} /> Metas nutricionales
-        </button>
-        <button
-          type="button"
-          className={`profile-tab profile-tab-skinfolds ${activeSection === 'skinfolds' ? 'active' : ''}`}
-          role="tab"
-          aria-selected={activeSection === 'skinfolds'}
-          onClick={() => setActiveSection('skinfolds')}
-        >
-          <Ruler size={16} /> Pliegues cutáneos
-        </button>
+        {!isTrainerNoSelf && (
+          <button
+            type="button"
+            className={`profile-tab profile-tab-nutrition ${activeSection === 'nutrition' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeSection === 'nutrition'}
+            onClick={() => setActiveSection('nutrition')}
+          >
+            <PieChart size={20} />
+            <span>Metas</span>
+          </button>
+        )}
+        {!isTrainerNoSelf && (
+          <button
+            type="button"
+            className={`profile-tab profile-tab-skinfolds ${activeSection === 'skinfolds' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeSection === 'skinfolds'}
+            onClick={() => setActiveSection('skinfolds')}
+          >
+            <Ruler size={20} />
+            <span>Pliegues</span>
+          </button>
+        )}
       </div>
 
-      {activeSection === 'personal' && (
+      {activeSection === 'personal' && isTrainerNoSelf && (
+        <article className="profile-section-card profile-section-card-personal">
+          <div className="profile-toggle-card profile-enable-self-use-toggle">
+            <label className="profile-toggle">
+              <input
+                type="checkbox"
+                checked={selfUseToggle}
+                onChange={(e) => setSelfUseToggle(e.target.checked)}
+              />
+              <span className="profile-toggle-custom" aria-hidden="true"></span>
+              <span className="profile-toggle-text">
+                <ToggleLeft size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                Activar seguimiento personal
+              </span>
+            </label>
+            <p className="profile-toggle-hint">
+              Completá tus datos biométricos para acceder al dashboard completo con nutrición, entrenamiento y progreso.
+            </p>
+          </div>
+
+          {selfUseToggle && (
+            <>
+              <div className="profile-biometric-grid profile-biometric-grid-editable profile-biometric-grid-compact">
+                <div className="profile-biometric-item profile-biometric-box">
+                  <label className="profile-biometric-label"><CalendarDays size={16} /> Edad</label>
+                  <div className="profile-biometric-input-wrap">
+                    <input className="login-input" type="number" min={1} max={120} value={enableAgeInput} onChange={(e) => setEnableAgeInput(e.target.value)} />
+                    <span className="profile-biometric-unit">años</span>
+                  </div>
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <CustomSelect
+                    id="enable-gender"
+                    label="Sexo"
+                    labelIcon={<UserRound size={16} />}
+                    value={enableSexInput}
+                    onChange={(value) => setEnableSexInput(value as 'male' | 'female')}
+                    options={[
+                      { value: 'male', label: 'Masculino' },
+                      { value: 'female', label: 'Femenino' },
+                    ]}
+                    placeholder="Selecciona"
+                  />
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <label className="profile-biometric-label"><Scale size={16} /> Peso</label>
+                  <div className="profile-biometric-input-wrap">
+                    <input className="login-input" type="number" min={20} max={300} step={0.1} value={enableWeightInput} onChange={(e) => setEnableWeightInput(e.target.value)} />
+                    <span className="profile-biometric-unit">kg</span>
+                  </div>
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <label className="profile-biometric-label"><Ruler size={16} /> Altura</label>
+                  <div className="profile-biometric-input-wrap">
+                    <input className="login-input" type="number" min={100} max={250} step={0.1} value={enableHeightInput} onChange={(e) => setEnableHeightInput(e.target.value)} />
+                    <span className="profile-biometric-unit">cm</span>
+                  </div>
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <CustomSelect
+                    id="enable-activity"
+                    label="Nivel de actividad"
+                    labelIcon={<Activity size={16} />}
+                    value={enableActivityInput}
+                    onChange={(value) => setEnableActivityInput(value)}
+                    options={ACTIVITY_LEVEL_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+                    placeholder="Selecciona nivel"
+                  />
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <CustomSelect
+                    id="enable-objective"
+                    label="Objetivo"
+                    labelIcon={<Target size={16} />}
+                    value={enableObjectiveInput}
+                    onChange={(value) => setEnableObjectiveInput(value as FitnessObjective)}
+                    options={OBJECTIVE_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+                    placeholder="Selecciona objetivo"
+                  />
+                </div>
+
+                <div className="profile-biometric-item profile-biometric-box">
+                  <CustomSelect
+                    id="enable-intensity"
+                    label="Intensidad"
+                    labelIcon={<Flame size={16} />}
+                    value={String(enableIntensityInput)}
+                    onChange={(value) => setEnableIntensityInput(Number(value))}
+                    options={INTENSITY_OPTIONS.map((opt) => ({ value: String(opt.value), label: opt.label }))}
+                    placeholder="Selecciona intensidad"
+                    panelPlacement="up"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="login-button profile-save-button"
+                onClick={handleEnableSelfUse}
+                disabled={isSavingEnableSelfUse}
+              >
+                <Save size={16} /> {isSavingEnableSelfUse ? 'Activando...' : 'Activar seguimiento personal'}
+              </button>
+            </>
+          )}
+        </article>
+      )}
+
+      {activeSection === 'personal' && !isTrainerNoSelf && (
         <article className="profile-section-card profile-section-card-personal">
           <div className="profile-biometric-grid profile-biometric-grid-editable profile-biometric-grid-compact">
             <div className="profile-biometric-item profile-biometric-box">
@@ -724,6 +982,7 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
               <h3>Historial reciente</h3>
               {history.slice(0, 3).map((item) => (
                 <div className="profile-history-item" key={`${item.measured_at}-${item.sum_of_skinfolds_mm}`}>
+
                   <div>
                     <p>{item.body_fat_percent}% grasa · {item.fat_free_mass_percent}% libre</p>
                     <small>{item.method}</small>
@@ -735,6 +994,134 @@ const ProfileBiometricsPanel: React.FC<ProfileBiometricsPanelProps> = ({ user })
           )}
         </article>
       )}
+
+      {/* ── Invite section: always visible below the active form ── */}
+      {user.role === 'trainer' && (
+        <article className="profile-section-card profile-invite-card">
+          <div className="profile-invite-header">
+            <Link2 size={16} />
+            <span>Código de invitación</span>
+          </div>
+
+          {!invite ? (
+            <button
+              type="button"
+              className="login-button profile-save-button"
+              onClick={handleLoadInvite}
+              disabled={inviteLoading}
+            >
+              {inviteLoading ? 'Cargando...' : 'Ver mi código de invitación'}
+            </button>
+          ) : (
+            <>
+              <div className="profile-invite-code-wrap">
+                <span className="profile-invite-code">{invite.code}</span>
+                <button
+                  type="button"
+                  className={`profile-invite-copy-btn ${inviteCopied ? 'copied' : ''}`}
+                  onClick={handleCopyCode}
+                  aria-label="Copiar código"
+                >
+                  <Clipboard size={14} />
+                  {inviteCopied ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+              <p className="profile-invite-expiry">
+                Expira el {new Date(invite.expires_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
+              <button
+                type="button"
+                className="profile-invite-refresh-btn"
+                onClick={handleGenerateInvite}
+                disabled={inviteLoading}
+              >
+                <RefreshCw size={13} /> {inviteLoading ? 'Generando...' : 'Generar nuevo código'}
+              </button>
+            </>
+          )}
+        </article>
+      )}
+
+      {user.role !== 'trainer' && (
+        <article className="profile-section-card profile-invite-card">
+          <div className="profile-invite-header">
+            <Link2 size={16} />
+            <span>Unirse a un entrenador</span>
+          </div>
+          <p className="profile-invite-hint">Si tu entrenador usa NovaFitness, pedile su código de invitación e ingresalo acá.</p>
+          <div className="profile-invite-input-row">
+            <input
+              className="login-input profile-invite-input"
+              type="text"
+              placeholder="Código de invitación"
+              value={inviteCodeInput}
+              onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+              maxLength={12}
+            />
+            <button
+              type="button"
+              className="login-button profile-invite-accept-btn"
+              onClick={handleAcceptInvite}
+              disabled={isAcceptingInvite || !inviteCodeInput.trim()}
+            >
+              {isAcceptingInvite ? 'Vinculando...' : 'Vincularme'}
+            </button>
+          </div>
+        </article>
+      )}
+
+      <article className="profile-section-card profile-invite-card" aria-label="Apariencia de la app">
+        <div className="profile-invite-header">
+          <span style={{ fontSize: '1rem' }}>🎨</span>
+          <span>Apariencia</span>
+        </div>
+        <p className="profile-invite-hint">Cambiá el tema visual de la app.</p>
+        <div style={{ display: 'flex', gap: '0.6rem', width: '100%' }}>
+          {(
+            [
+              { id: 'original' as AppTheme, label: 'Original', accent: '#a855f7' },
+              { id: 'dark' as AppTheme, label: 'Dark', accent: '#00f5ff' },
+              { id: 'light' as AppTheme, label: 'Light', accent: '#b2f0f7' },
+            ] as const
+          ).map((opt) => {
+            const active = theme === opt.id
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setTheme(opt.id)}
+                style={{
+                  flex: 1,
+                  padding: '0.55rem 0.4rem',
+                  borderRadius: '0.75rem',
+                  border: active ? `1.5px solid ${opt.accent}` : '1.5px solid var(--theme-header-btn-border)',
+                  background: active ? `${opt.accent}22` : 'var(--theme-accent-glow)',
+                  color: active ? opt.accent : 'var(--theme-header-btn-color)',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <span
+                  style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: opt.accent,
+                    display: 'block',
+                  }}
+                />
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </article>
     </section>
   )
 }

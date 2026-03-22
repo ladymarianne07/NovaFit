@@ -183,10 +183,11 @@ class SkinfoldService:
         return measurement
 
     def get_history(self, user_id: int, limit: int = 20) -> list[SkinfoldMeasurement]:
+        safe_limit = min(max(limit, 1), 100)
         return (
             self.db.query(SkinfoldMeasurement)
             .filter(SkinfoldMeasurement.user_id == user_id)
             .order_by(SkinfoldMeasurement.measured_at.desc())
-            .limit(limit)
+            .limit(safe_limit)
             .all()
         )

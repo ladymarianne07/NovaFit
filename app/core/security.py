@@ -70,4 +70,3 @@ def extract_user_id_from_token(token: str) -> Optional[int]:
         return int(user_id)
     except (ValueError, TypeError):
         return None
-    return None

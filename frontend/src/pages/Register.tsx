@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Mail, Lock, User, Zap, Scale, Activity, Calendar, Ruler, ArrowLeft } from 'lucide-react'
+import { Mail, Lock, User, Zap, Scale, Activity, Calendar, Ruler, ArrowLeft, GraduationCap, Users, UserCheck } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/UI/Button'
 import { FormField } from '../components/UI/FormField'
@@ -9,7 +9,7 @@ import { ValidationService } from '../services/validation'
 import { useToast } from '../contexts/ToastContext'
 import { requiredFieldMessage, translateValidationMessage } from '../services/validationMessages'
 import ObjectiveForm from '../components/ObjectiveForm'
-import { FitnessObjective } from '../services/api'
+import { FitnessObjective, UserRole } from '../services/api'
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(1)
@@ -32,12 +32,50 @@ const Register: React.FC = () => {
   const [height, setHeight] = useState('')
   const [activityLevel, setActivityLevel] = useState('')
 
+  // Role
+  const [role, setRole] = useState<UserRole>('student')
+
+  // Trainer-only: does the trainer also want to use the app for themselves?
+  const [usesAppForSelf, setUsesAppForSelf] = useState<boolean | null>(null)
+
   // Objective data (optional)
   const [objective, setObjective] = useState<FitnessObjective | undefined>(undefined)
   const [aggressiveness, setAggressiveness] = useState(2)
 
   const { register } = useAuth()
   const { showError, showSuccess } = useToast()
+
+  // Step layout:
+  //   Step 1: Credentials + role (all users)
+  //   Step 2: Trainer self-use question (trainers only)
+  //   Step 3: Biometrics (students and trainers with uses_app_for_self=true)
+  //   Step 4: Fitness objective (same as above)
+  //
+  // Student flow:  1 → 3 → 4
+  // Trainer+yes:   1 → 2 → 3 → 4
+  // Trainer+no:    1 → 2 → register
+
+  const getTotalSteps = () => {
+    if (role === 'student') return 3
+    if (usesAppForSelf === false) return 2
+    return 4
+  }
+
+  const getDisplayStep = () => {
+    if (role === 'student') {
+      if (step === 1) return 1
+      if (step === 3) return 2
+      return 3 // step 4
+    }
+    return step // 1, 2, 3, 4 for trainers
+  }
+
+  const stepLabel: Record<number, string> = {
+    1: 'Detalles de la cuenta',
+    2: 'Tipo de uso',
+    3: 'Perfil biométrico',
+    4: 'Objetivo fitness',
+  }
 
   const goToStep = (nextStep: number) => {
     setStepDirection(nextStep > step ? 'forward' : 'backward')
@@ -193,22 +231,19 @@ const Register: React.FC = () => {
 
   const handleStep1Submit = (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (validateStep1()) {
-      goToStep(2)
+      // Trainers go to the self-use question; students skip straight to biometrics
+      goToStep(role === 'trainer' ? 2 : 3)
     }
   }
 
-  const handleStep2Submit = async (e: React.FormEvent) => {
+  const handleStep3Submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
     if (!validateStep2()) return
-
-    // Move to step 3 (objective) instead of registering immediately
-    goToStep(3)
+    goToStep(4)
   }
 
-  const handleStep3Submit = async (e: React.FormEvent) => {
+  const handleStep4Submit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!objective) {
@@ -217,24 +252,22 @@ const Register: React.FC = () => {
     }
 
     setIsLoading(true)
-
     try {
-      // Truncate password if needed for bcrypt compatibility (matches backend)
       const safePassword = ValidationService.truncatePasswordIfNeeded(password)
-      
-      // Register user with all data including biometrics and objective
       await register({
         email,
         password: safePassword,
         first_name: firstName,
         last_name: lastName,
+        role,
+        ...(role === 'trainer' ? { uses_app_for_self: true } : {}),
         age: parseInt(age),
         gender: gender as 'male' | 'female',
         weight: parseFloat(weight),
         height: parseFloat(height),
         activity_level: parseFloat(activityLevel),
-        objective: objective,
-        aggressiveness_level: objective ? aggressiveness : undefined
+        objective,
+        aggressiveness_level: objective ? aggressiveness : undefined,
       })
       showSuccess('Tu cuenta se creó correctamente', '¡Registro completado!')
     } catch (err: any) {
@@ -242,7 +275,30 @@ const Register: React.FC = () => {
       const message = typeof detail === 'string'
         ? translateValidationMessage(detail)
         : 'No pudimos completar tu registro. Inténtalo nuevamente.'
+      showError(message, 'Error al registrar')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
+  const handleTrainerNoSelfUseSubmit = async () => {
+    setIsLoading(true)
+    try {
+      const safePassword = ValidationService.truncatePasswordIfNeeded(password)
+      await register({
+        email,
+        password: safePassword,
+        first_name: firstName,
+        last_name: lastName,
+        role,
+        uses_app_for_self: false,
+      })
+      showSuccess('Tu cuenta se creó correctamente', '¡Registro completado!')
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      const message = typeof detail === 'string'
+        ? translateValidationMessage(detail)
+        : 'No pudimos completar tu registro. Inténtalo nuevamente.'
       showError(message, 'Error al registrar')
     } finally {
       setIsLoading(false)
@@ -257,11 +313,6 @@ const Register: React.FC = () => {
     { value: '1.80', label: 'Muy activo', desc: 'Ejercicio muy intenso o trabajo físico' }
   ]
 
-  const stepBadges = [
-    'Detalles de la cuenta',
-    'Perfil biométrico',
-    'Objetivo fitness'
-  ]
 
   return (
     <div className="login-container">
@@ -292,24 +343,47 @@ const Register: React.FC = () => {
               className="register-progress-step register-progress-step-single is-active"
               aria-current="step"
             >
-              <span className="register-progress-step-number">{step}</span>
-              <span className="register-progress-step-label">{stepBadges[step - 1]}</span>
+              <span className="register-progress-step-number">{getDisplayStep()}</span>
+              <span className="register-progress-step-label">{stepLabel[step]}</span>
             </div>
           </div>
 
           <div className="register-progress-bar bg-gray-700 bg-opacity-30" aria-hidden="true">
             <div
               className="register-progress-bar-fill bg-white bg-opacity-40"
-              style={{ width: `${(step / 3) * 100}%` }}
+              style={{ width: `${(getDisplayStep() / getTotalSteps()) * 100}%` }}
             ></div>
           </div>
         </div>
 
         {/* Registration Form */}
-        <form onSubmit={step === 1 ? handleStep1Submit : step === 2 ? handleStep2Submit : handleStep3Submit} className="login-form">
+        <form
+          onSubmit={
+            step === 1 ? handleStep1Submit :
+            step === 3 ? handleStep3Submit :
+            step === 4 ? handleStep4Submit :
+            (e) => e.preventDefault()
+          }
+          className="login-form"
+        >
           <div key={step} className={`register-step-panel ${stepDirection === 'backward' ? 'register-step-backward' : 'register-step-forward'}`}>
+
+          {/* Step 1 — Credentials + role */}
           {step === 1 ? (
             <div className="register-step-content">
+              <CustomSelect
+                id="role"
+                label="Tipo de cuenta"
+                value={role}
+                onChange={(value) => setRole(value as UserRole)}
+                icon={<GraduationCap className="w-5 h-5" />}
+                placeholder="Selecciona el tipo de cuenta"
+                options={[
+                  { value: 'student', label: 'Alumno', description: 'Sigue tu progreso y nutrición' },
+                  { value: 'trainer', label: 'Entrenador', description: 'Crea planes y monitorea el progreso de tus clientes' },
+                ]}
+              />
+
               <div className="register-step-grid">
                 <FormField
                   id="firstName"
@@ -398,10 +472,60 @@ const Register: React.FC = () => {
               />
 
               <Button type="submit" className="w-full register-step-primary-action">
-                Continuar a Configuración de Perfil
+                Continuar
               </Button>
             </div>
           ) : step === 2 ? (
+            <div className="register-step-content">
+              <p className="register-objective-note" style={{ marginBottom: '1rem' }}>
+                ¿También querés usar NovaFitness para tu propio entrenamiento?
+              </p>
+
+              <div className="register-trainer-choice-grid">
+                <button
+                  type="button"
+                  className="register-trainer-choice-card"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setUsesAppForSelf(true)
+                    goToStep(3)
+                  }}
+                >
+                  <UserCheck className="w-8 h-8 register-trainer-choice-icon" />
+                  <span className="register-trainer-choice-title">Sí, también la uso para mí</span>
+                  <span className="register-trainer-choice-desc">Vas a poder registrar tus comidas, entrenamientos y ver tu progreso propio.</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="register-trainer-choice-card"
+                  disabled={isLoading}
+                  onClick={() => {
+                    setUsesAppForSelf(false)
+                    handleTrainerNoSelfUseSubmit()
+                  }}
+                >
+                  <Users className="w-8 h-8 register-trainer-choice-icon" />
+                  <span className="register-trainer-choice-title">No, solo administro alumnos</span>
+                  <span className="register-trainer-choice-desc">Solo vas a ver el panel de tus alumnos y su información.</span>
+                </button>
+              </div>
+
+              <div style={{ marginTop: '1rem' }}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => goToStep(1)}
+                  disabled={isLoading}
+                  icon={<ArrowLeft className="w-4 h-4" />}
+                  className="register-back-ghost"
+                >
+                  Atrás
+                </Button>
+              </div>
+            </div>
+
+          ) : step === 3 ? (
             <div className="register-step-content">
               <div className="register-step-grid">
                 <FormField
@@ -463,7 +587,6 @@ const Register: React.FC = () => {
                   step={0.1}
                   required
                 />
-
                 <FormField
                   id="height"
                   label="Altura (cm)"
@@ -510,7 +633,7 @@ const Register: React.FC = () => {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => goToStep(1)}
+                  onClick={() => goToStep(role === 'trainer' ? 2 : 1)}
                   disabled={isLoading}
                   icon={<ArrowLeft className="w-4 h-4" />}
                   className="register-back-ghost"
@@ -524,11 +647,12 @@ const Register: React.FC = () => {
                   icon={!isLoading ? <Zap className="w-4 h-4" /> : undefined}
                   className="w-full register-step-primary-action"
                 >
-                  {isLoading ? 'Creando...' : 'Configurar Objetivo'}
+                  {isLoading ? 'Procesando...' : 'Configurar Objetivo'}
                 </Button>
               </div>
             </div>
-          ) : step === 3 ? (
+
+          ) : step === 4 ? (
             <div className="register-step-content">
               <ObjectiveForm
                 selectedObjective={objective}
@@ -543,7 +667,7 @@ const Register: React.FC = () => {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => goToStep(2)}
+                  onClick={() => goToStep(3)}
                   disabled={isLoading}
                   icon={<ArrowLeft className="w-4 h-4" />}
                   className="register-back-ghost"

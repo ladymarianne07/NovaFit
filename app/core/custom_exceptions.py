@@ -101,3 +101,55 @@ class WorkoutActivityNotFoundError(NovaFitnessException):
 class WorkoutWeightRequiredError(NovaFitnessException):
     """Raised when calories calculation requires user weight and none is available."""
     pass
+
+
+class RoutineNotFoundError(NovaFitnessException):
+    """Raised when the user has no active routine."""
+    pass
+
+
+class RoutineParsingError(NovaFitnessException):
+    """Raised when Gemini fails to parse the routine file."""
+    pass
+
+
+class RoutineFileTooLargeError(NovaFitnessException):
+    """Raised when the uploaded routine file exceeds the size limit."""
+    pass
+
+
+class RoutineInvalidFileTypeError(NovaFitnessException):
+    """Raised when the uploaded file type is not supported."""
+    pass
+
+
+# ── Trainer module exceptions ──────────────────────────────────────────────────
+
+class TrainerOnlyError(NovaFitnessException):
+    """Raised when a non-trainer user attempts a trainer-only action."""
+    pass
+
+
+class InviteNotFoundError(NovaFitnessException):
+    """Raised when an invite code does not exist."""
+    pass
+
+
+class InviteAlreadyUsedError(NovaFitnessException):
+    """Raised when an invite code has already been redeemed."""
+    pass
+
+
+class InviteExpiredError(NovaFitnessException):
+    """Raised when an invite code is past its expiry date."""
+    pass
+
+
+class StudentAlreadyLinkedError(NovaFitnessException):
+    """Raised when a student is already linked to an active trainer."""
+    pass
+
+
+class StudentNotLinkedError(NovaFitnessException):
+    """Raised when a student is not linked to the requesting trainer."""
+    pass

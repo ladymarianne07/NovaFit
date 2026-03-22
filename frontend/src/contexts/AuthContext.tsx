@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { User, authAPI, LoginRequest, RegisterRequest, BiometricData, FitnessObjective, NutritionTargetsUpdateRequest } from '../services/api'
+import { User, authAPI, LoginRequest, RegisterRequest, BiometricData, FitnessObjective, NutritionTargetsUpdateRequest, EnableSelfUseRequest } from '../services/api'
 
 interface AuthContextType {
   user: User | null
@@ -10,6 +10,7 @@ interface AuthContextType {
   updateBiometrics: (biometrics: BiometricData) => Promise<void>
   updateObjective: (objective: FitnessObjective, aggressivenessLevel: number) => Promise<void>
   updateNutritionTargets: (payload: NutritionTargetsUpdateRequest) => Promise<void>
+  enableSelfUse: (payload: EnableSelfUseRequest) => Promise<void>
   refreshUser: () => Promise<void>
 }
 
@@ -104,6 +105,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const enableSelfUse = async (payload: EnableSelfUseRequest): Promise<void> => {
+    try {
+      const updatedUser = await authAPI.enableSelfUse(payload)
+      setUser(updatedUser)
+    } catch (error) {
+      throw error
+    }
+  }
+
   const refreshUser = async (): Promise<void> => {
     try {
       const userData = await authAPI.getCurrentUser()
@@ -122,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateBiometrics,
     updateObjective,
     updateNutritionTargets,
+    enableSelfUse,
     refreshUser,
   }
 

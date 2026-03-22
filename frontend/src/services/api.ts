@@ -33,12 +33,15 @@ api.interceptors.response.use(
 
 // Types
 export type FitnessObjective = 'maintenance' | 'fat_loss' | 'muscle_gain' | 'body_recomp' | 'performance'
+export type UserRole = 'student' | 'trainer'
 
 export interface User {
   id: number
   email: string
   first_name?: string
   last_name?: string
+  role: UserRole
+  uses_app_for_self?: boolean
   is_active: boolean
   created_at: string
   age?: number
@@ -78,13 +81,25 @@ export interface RegisterRequest {
   password: string
   first_name: string
   last_name: string
-  // All biometric fields are now required for registration
+  role?: UserRole
+  uses_app_for_self?: boolean
+  // Biometric fields — required for students and trainers who use the app for themselves
+  age?: number
+  gender?: 'male' | 'female'
+  weight?: number
+  height?: number
+  activity_level?: number
+  // Fitness objective (optional at registration)
+  objective?: FitnessObjective
+  aggressiveness_level?: number
+}
+
+export interface EnableSelfUseRequest {
   age: number
   gender: 'male' | 'female'
   weight: number
   height: number
   activity_level: number
-  // Fitness objective (optional at registration)
   objective?: FitnessObjective
   aggressiveness_level?: number
 }
@@ -406,6 +421,11 @@ export const authAPI = {
     const response = await api.put('/users/me/nutrition-targets', payload)
     return response.data
   },
+
+  enableSelfUse: async (payload: EnableSelfUseRequest): Promise<User> => {
+    const response = await api.post('/users/me/enable-self-use', payload)
+    return response.data
+  },
 }
 
 // Nutrition API endpoints
@@ -446,6 +466,16 @@ export const foodAPI = {
 
   parseAndLog: async (payload: FoodParseRequest): Promise<FoodParseLogResponse> => {
     const response = await api.post('/food/parse-and-log', payload)
+    return response.data
+  },
+
+  parsePreview: async (payload: FoodParseRequest): Promise<FoodParseLogResponse> => {
+    const response = await api.post('/food/parse-preview', payload)
+    return response.data
+  },
+
+  confirmAndLog: async (payload: ConfirmMealsRequest): Promise<FoodParseLogResponse> => {
+    const response = await api.post('/food/confirm-and-log', payload)
     return response.data
   },
 }
@@ -499,6 +529,233 @@ export const progressAPI = {
   getTimeline: async (periodo: 'semana' | 'mes' | 'anio' = 'mes'): Promise<ProgressTimelineResponse> => {
     const response = await api.get('/users/me/progress/timeline', { params: { periodo } })
     return response.data
+  },
+}
+
+// Routine Types
+export interface RoutineExercise {
+  id: string
+  name: string
+  muscle?: string
+  group?: string
+  sets?: string
+  reps?: string
+  rest_seconds?: number
+  estimated_calories: number
+  notes?: string
+}
+
+export interface RoutineSession {
+  id: string
+  label: string
+  title: string
+  day_label?: string
+  color?: string
+  estimated_calories_per_session: number
+  exercises: RoutineExercise[]
+}
+
+export interface RoutineHealthAnalysis {
+  conditions_detected: string[]
+  contraindications_applied: string[]
+  adaptations: string[]
+  warning?: string | null
+}
+
+export interface UserRoutineResponse {
+  id: number
+  status: 'processing' | 'ready' | 'error'
+  source_filename?: string
+  source_type?: 'file' | 'ai_text'
+  html_content?: string
+  error_message?: string
+  routine_data?: {
+    sessions: RoutineSession[]
+    title?: string
+    subtitle?: string
+  }
+  health_analysis?: RoutineHealthAnalysis
+  intake_data?: Record<string, unknown>
+}
+
+export interface RoutineIntakeData {
+  objective: 'fat_loss' | 'body_recomp' | 'muscle_gain'
+  duration_months: number
+  health_conditions: string
+  medications: string
+  injuries: string
+  preferred_exercises: string
+  frequency_days: '2' | '3-4' | '5+'
+  experience_level: 'principiante' | 'intermedio' | 'avanzado'
+  equipment: 'gimnasio completo' | 'mancuernas en casa' | 'bandas elásticas' | 'peso corporal'
+  session_duration_minutes: number
+}
+
+export interface RoutineGenerateRequest {
+  intake: RoutineIntakeData
+  free_text: string
+}
+
+export interface RoutineEditRequest {
+  edit_instruction: string
+}
+
+export interface RoutineLogSessionRequest {
+  session_id: string
+  session_date: string
+  skipped_exercise_ids: string[]
+}
+
+export interface ConfirmMealsRequest {
+  items: Array<{
+    meal_type: string
+    meal_label: string
+    food_name: string
+    quantity_grams: number
+    calories_per_100g: number
+    carbs_per_100g: number
+    protein_per_100g: number
+    fat_per_100g: number
+  }>
+}
+
+export const routineAPI = {
+  getActive: async (): Promise<UserRoutineResponse> => {
+    const response = await api.get('/v1/routines/active')
+    return response.data
+  },
+
+  upload: async (file: File): Promise<UserRoutineResponse> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post('/v1/routines/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  generateFromText: async (payload: RoutineGenerateRequest): Promise<UserRoutineResponse> => {
+    const response = await api.post('/v1/routines/generate', payload)
+    return response.data
+  },
+
+  editRoutine: async (payload: RoutineEditRequest): Promise<UserRoutineResponse> => {
+    const response = await api.post('/v1/routines/edit', payload)
+    return response.data
+  },
+
+  logSession: async (payload: RoutineLogSessionRequest): Promise<WorkoutSessionResponse> => {
+    const response = await api.post('/v1/routines/log-session', payload)
+    return response.data
+  },
+}
+
+// Trainer Types
+export interface TrainerInviteResponse {
+  id: number
+  code: string
+  expires_at: string
+  created_at: string
+}
+
+export interface StudentSummary {
+  id: number
+  email: string
+  first_name?: string
+  last_name?: string
+  linked_at: string
+  objective?: string
+  target_calories?: number
+  weight_kg?: number
+}
+
+export interface NotificationResponse {
+  id: number
+  type: string
+  title: string
+  body: string
+  is_read: boolean
+  created_at: string
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationResponse[]
+  unread_count: number
+}
+
+export const trainerAPI = {
+  generateInvite: async (): Promise<TrainerInviteResponse> => {
+    const response = await api.post('/trainer/invite')
+    return response.data
+  },
+
+  getCurrentInvite: async (): Promise<TrainerInviteResponse> => {
+    const response = await api.get('/trainer/invite')
+    return response.data
+  },
+
+  listStudents: async (): Promise<StudentSummary[]> => {
+    const response = await api.get('/trainer/students')
+    return response.data
+  },
+
+  getStudent: async (studentId: number): Promise<User> => {
+    const response = await api.get(`/trainer/students/${studentId}`)
+    return response.data
+  },
+
+  unlinkStudent: async (studentId: number): Promise<void> => {
+    await api.delete(`/trainer/students/${studentId}`)
+  },
+
+  updateStudentBiometrics: async (studentId: number, biometrics: BiometricData): Promise<User> => {
+    const response = await api.put(`/trainer/students/${studentId}/biometrics`, biometrics)
+    return response.data
+  },
+
+  updateStudentObjective: async (
+    studentId: number,
+    objective: FitnessObjective,
+    aggressiveness_level: number = 2,
+  ): Promise<User> => {
+    const response = await api.put(`/trainer/students/${studentId}/objective`, {
+      objective,
+      aggressiveness_level,
+    })
+    return response.data
+  },
+
+  getStudentMacros: async (studentId: number, targetDate?: string): Promise<MacronutrientData> => {
+    const params = targetDate ? { target_date: targetDate } : {}
+    const response = await api.get(`/trainer/students/${studentId}/macros`, { params })
+    return response.data
+  },
+
+  getStudentSkinfolds: async (studentId: number, limit = 10): Promise<SkinfoldCalculationResult[]> => {
+    const response = await api.get(`/trainer/students/${studentId}/skinfolds`, { params: { limit } })
+    return response.data
+  },
+}
+
+export const inviteAPI = {
+  acceptInvite: async (code: string): Promise<{ status: string }> => {
+    const response = await api.post('/invite/accept', { code })
+    return response.data
+  },
+}
+
+export const notificationsAPI = {
+  getNotifications: async (): Promise<NotificationListResponse> => {
+    const response = await api.get('/notifications')
+    return response.data
+  },
+
+  markAsRead: async (notificationId: number): Promise<void> => {
+    await api.put(`/notifications/${notificationId}/read`)
+  },
+
+  markAllAsRead: async (): Promise<void> => {
+    await api.put('/notifications/read-all')
   },
 }
 

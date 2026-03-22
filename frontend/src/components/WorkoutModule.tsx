@@ -1,6 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Brain, ChevronLeft, ChevronRight, Dumbbell, Flame, Sparkles, Trash2 } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Clock, Dumbbell, Flame, ListChecks, Sparkles, Trash2 } from 'lucide-react'
+import RoutineModule from './RoutineModule'
 import {
+  routineAPI,
+  UserRoutineResponse,
+  RoutineSession,
   workoutAPI,
   WorkoutDailyEnergyResponse,
   WorkoutSessionCreateRequest,
@@ -175,7 +179,7 @@ const normalizeText = (value: string) =>
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}:.'’\s-]/gu, ' ')
+    .replace(/[^\p{L}\p{N}:.''\s-]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -274,7 +278,7 @@ const parseDurationMinutes = (segment: string): number | null => {
     return minutes > 0 && minutes <= MAX_WORKOUT_DURATION_MINUTES ? minutes : null
   }
 
-  const apostropheMatch = normalized.match(/(\d+)\s*['’]/)
+  const apostropheMatch = normalized.match(/(\d+)\s*['']/)
   if (apostropheMatch) {
     const value = Number(apostropheMatch[1])
     return Number.isNaN(value) || value <= 0 || value > MAX_WORKOUT_DURATION_MINUTES
@@ -400,36 +404,70 @@ const formatIntensityLabel = (intensity?: string | null) => {
   return 'Media'
 }
 
+const DAY_NAMES_ES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+const findTodaySession = (routine: UserRoutineResponse | null): RoutineSession | null => {
+  if (!routine?.routine_data?.sessions?.length) return null
+  const today = DAY_NAMES_ES[new Date().getDay()]
+  return (
+    routine.routine_data.sessions.find((s) =>
+      s.day_label?.toLowerCase().includes(today.toLowerCase()),
+    ) ?? routine.routine_data.sessions[0]
+  )
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
   const targetDate = useMemo(() => getLocalDateISO(), [])
 
+  // ── Data state ───────────────────────────────────────────────────────────
   const [sessions, setSessions] = useState<WorkoutSessionResponse[]>([])
   const [dailyEnergy, setDailyEnergy] = useState<WorkoutDailyEnergyResponse | null>(null)
+  const [routine, setRoutine] = useState<UserRoutineResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [listError, setListError] = useState('')
 
-  const [isAiOpen, setIsAiOpen] = useState(false)
+  // ── Tab state ────────────────────────────────────────────────────────────
+  const [moduleTab, setModuleTab] = useState<'sessions' | 'routine'>('sessions')
+
+  // ── Routine toggle ───────────────────────────────────────────────────────
+  const [routineCompleted, setRoutineCompleted] = useState(false)
+
+  // ── AI flow state ────────────────────────────────────────────────────────
+  const [showAiForm, setShowAiForm] = useState(false)
+  const [showRoutineModal, setShowRoutineModal] = useState(false)
   const [aiInput, setAiInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const [activeSessionIndex, setActiveSessionIndex] = useState(0)
+  // ── Delete state ─────────────────────────────────────────────────────────
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null)
 
-  const sessionTouchStartXRef = useRef<number | null>(null)
+  // ── Derived values ───────────────────────────────────────────────────────
+  const hasActiveRoutine = routine?.status === 'ready'
+  const todaySession = useMemo(() => findTodaySession(routine), [routine])
+  const routineKcal = Math.round(todaySession?.estimated_calories_per_session ?? 0)
+  const sessionDuration = (routine?.intake_data as Record<string, unknown>)?.session_duration_minutes as number ?? 60
 
+  const exerciseKcal = (dailyEnergy?.exercise_kcal_est ?? 0) + (routineCompleted ? routineKcal : 0)
+  const intakeKcal = dailyEnergy?.intake_kcal ?? 0
+  const netKcal = Math.round(intakeKcal - exerciseKcal)
+  const showCalories = intakeKcal > 0 || exerciseKcal > 0
+
+  // ── Data fetching ────────────────────────────────────────────────────────
   const fetchWorkoutData = useCallback(async () => {
     setIsLoading(true)
     setListError('')
-
     try {
-      const [sessionsData, energyData] = await Promise.all([
+      const [sessionsData, energyData, routineData] = await Promise.all([
         workoutAPI.listSessions(targetDate),
         workoutAPI.getDailyEnergy(targetDate),
+        routineAPI.getActive().catch(() => null),
       ])
-
       setSessions(sessionsData)
       setDailyEnergy(energyData)
+      setRoutine(routineData)
     } catch {
       setListError('No se pudo cargar el resumen de entrenamiento.')
     } finally {
@@ -437,42 +475,37 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
     }
   }, [targetDate])
 
-  useEffect(() => {
-    fetchWorkoutData()
-  }, [fetchWorkoutData])
+  useEffect(() => { fetchWorkoutData() }, [fetchWorkoutData])
 
   useEffect(() => {
-    const handler = () => {
-      fetchWorkoutData()
-    }
-
+    const handler = () => fetchWorkoutData()
     window.addEventListener('nutrition:updated', handler)
     window.addEventListener('workout:updated', handler)
-
     return () => {
       window.removeEventListener('nutrition:updated', handler)
       window.removeEventListener('workout:updated', handler)
     }
   }, [fetchWorkoutData])
 
-  useEffect(() => {
-    setActiveSessionIndex((current) => {
-      if (sessions.length === 0) return 0
-      return Math.min(current, sessions.length - 1)
-    })
-  }, [sessions.length])
-
+  // ── AI form ──────────────────────────────────────────────────────────────
   const parsedPreview = useMemo(() => {
-    if (!aiInput.trim()) {
-      return []
-    }
-
-    try {
-      return parseWorkoutInput(aiInput)
-    } catch {
-      return []
-    }
+    if (!aiInput.trim()) return []
+    try { return parseWorkoutInput(aiInput) } catch { return [] }
   }, [aiInput])
+
+  const handleAiBtnClick = () => {
+    if (hasActiveRoutine && !routineCompleted) {
+      setShowRoutineModal(true)
+    } else {
+      setShowAiForm(true)
+    }
+  }
+
+  const handleRoutineModalOption = (replaces: boolean) => {
+    setShowRoutineModal(false)
+    if (replaces) setRoutineCompleted(true)
+    setShowAiForm(true)
+  }
 
   const handleCreateSession = async () => {
     try {
@@ -480,7 +513,6 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
       setSubmitError('')
 
       const blocks = parseWorkoutInput(aiInput)
-
       const payload: WorkoutSessionCreateRequest = {
         session_date: targetDate,
         source: 'ai',
@@ -488,23 +520,17 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
         raw_input: aiInput.trim(),
         blocks,
       }
-
       await workoutAPI.createSession(payload)
       await fetchWorkoutData()
-
       window.dispatchEvent(new Event('workout:updated'))
-
       setAiInput('')
-      setIsAiOpen(false)
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail
-      if (typeof detail === 'string' && detail.trim()) {
-        setSubmitError(detail)
-      } else if (error instanceof Error) {
-        setSubmitError(error.message)
-      } else {
-        setSubmitError('No se pudo guardar el entrenamiento. Intenta nuevamente.')
-      }
+      setShowAiForm(false)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = err?.response?.data?.detail
+      if (typeof detail === 'string' && detail.trim()) setSubmitError(detail)
+      else if (err instanceof Error) setSubmitError(err.message)
+      else setSubmitError('No se pudo guardar el entrenamiento. Intenta nuevamente.')
     } finally {
       setIsSubmitting(false)
     }
@@ -523,240 +549,297 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
     }
   }
 
-  const handleSessionsTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    sessionTouchStartXRef.current = event.touches[0]?.clientX ?? null
+  const closeAiForm = () => {
+    setShowAiForm(false)
+    setAiInput('')
+    setSubmitError('')
   }
 
-  const handleSessionsTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (sessionTouchStartXRef.current === null) return
-
-    const endX = event.changedTouches[0]?.clientX ?? sessionTouchStartXRef.current
-    const deltaX = endX - sessionTouchStartXRef.current
-    const swipeThreshold = 45
-
-    if (Math.abs(deltaX) < swipeThreshold) {
-      sessionTouchStartXRef.current = null
-      return
-    }
-
-    if (deltaX < 0) {
-      setActiveSessionIndex((current) => Math.min(current + 1, sessions.length - 1))
-    } else {
-      setActiveSessionIndex((current) => Math.max(current - 1, 0))
-    }
-
-    sessionTouchStartXRef.current = null
-  }
-
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <section className={`workout-module ${className}`.trim()} aria-label="Módulo de entrenamiento">
-      <div className="workout-top-action">
+
+      {/* ── Module tabs ── */}
+      <div className="module-tabs" role="tablist" aria-label="Secciones de entrenamiento">
         <button
           type="button"
-          className="nutrition-primary-button"
-          onClick={() => setIsAiOpen((current) => !current)}
+          role="tab"
+          aria-selected={moduleTab === 'sessions'}
+          className={`module-tab ${moduleTab === 'sessions' ? 'active' : ''}`}
+          onClick={() => setModuleTab('sessions')}
         >
-          <Brain size={16} /> {isAiOpen ? 'Cerrar ingreso IA' : 'Ingresar entreno por IA'}
+          <Dumbbell size={20} />
+          <span>Mis Entrenos</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={moduleTab === 'routine'}
+          className={`module-tab ${moduleTab === 'routine' ? 'active' : ''}`}
+          onClick={() => setModuleTab('routine')}
+        >
+          <ListChecks size={20} />
+          <span>Mi Rutina</span>
         </button>
       </div>
 
-      {isAiOpen && (
-        <article className="nutrition-card workout-panel" role="region" aria-label="Ingreso de entrenamiento por IA">
-          <label className="nutrition-ai-label" htmlFor="ai-workout-input">
-            Describe tu entrenamiento
-          </label>
+      {moduleTab === 'routine' ? (
+        <RoutineModule />
+      ) : (
+        <>
+          {/* ── Ingresar entreno por IA ── */}
+          <button type="button" className="workout-ai-btn" onClick={handleAiBtnClick}>
+            <Sparkles size={15} />
+            Ingresar entreno por IA
+          </button>
 
-          <p className="nutrition-ai-hint">
-            Ejemplo: <strong>45 min caminar intensidad media + 20 min hiit alta</strong>
-          </p>
-
-          <textarea
-            id="ai-workout-input"
-            className="nutrition-ai-textarea"
-            placeholder="Ej: 30 min trote suave + 25 min pesas intenso"
-            rows={4}
-            value={aiInput}
-            onChange={(event) => {
-              setSubmitError('')
-              setAiInput(event.target.value)
-            }}
-          />
-
-          {parsedPreview.length > 0 && (
-            <div className="workout-preview" aria-label="Vista previa del entrenamiento detectado">
-              {parsedPreview.map((block, index) => (
-                <span key={`${block.activity}-${index}`} className="workout-preview-chip">
-                  {index + 1}. {block.activity} · {block.duration_minutes} min · {formatIntensityLabel(block.intensity)}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {submitError && (
-            <p className="error-message" role="alert">
-              {submitError}
-            </p>
-          )}
-
-          <div className="nutrition-ai-footer">
-            <button
-              type="button"
-              className="nutrition-primary-button"
-              onClick={handleCreateSession}
-              disabled={isSubmitting}
-            >
-              <Sparkles size={16} /> {isSubmitting ? 'Calculando...' : 'Guardar entrenamiento'}
-            </button>
-          </div>
-        </article>
-      )}
-
-      <article className="nutrition-card workout-panel" role="region" aria-label="Impacto calórico del entrenamiento">
-        <div className="nutrition-card-header">
-          <h3 className="nutrition-card-title">
-            <Flame size={18} /> Calorías del día (entreno)
-          </h3>
-        </div>
-
-        {dailyEnergy ? (
-          <div className="workout-energy-grid">
-            <div className="workout-energy-pill intake">
-              <span>Ingeridas</span>
-              <strong>{Math.round(dailyEnergy.intake_kcal)} kcal</strong>
-            </div>
-            <div className="workout-energy-pill burned">
-              <span>Ejercicio</span>
-              <strong>-{Math.round(dailyEnergy.exercise_kcal_est)} kcal</strong>
-            </div>
-            <div className="workout-energy-pill net">
-              <span>Neto</span>
-              <strong>{Math.round(dailyEnergy.net_kcal_est)} kcal</strong>
-            </div>
-          </div>
-        ) : (
-          <div className="nutrition-empty-state">
-            <p>No hay datos de energía para hoy todavía.</p>
-          </div>
-        )}
-      </article>
-
-      <article className="nutrition-card workout-panel" role="region" aria-label="Mis entrenamientos">
-        <div className="nutrition-card-header">
-          <h3 className="nutrition-card-title">
-            <Dumbbell size={18} /> Mis entrenamientos
-          </h3>
-        </div>
-
-        {listError && (
-          <p className="error-message" role="alert">
-            {listError}
-          </p>
-        )}
-
-        {isLoading ? (
-          <div className="nutrition-empty-state">
-            <div className="loading-stack">
-              <div className="neon-loader neon-loader--sm" aria-hidden="true"></div>
-              <p>Cargando entrenamientos...</p>
-            </div>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="nutrition-empty-state">
-            <p>Hoy todavía no cargaste entrenamientos.</p>
-          </div>
-        ) : (
-          <div className="nutrition-meals-slider">
-            <div className="nutrition-slider-controls">
-              <button
-                type="button"
-                className="nutrition-slider-nav"
-                onClick={() => setActiveSessionIndex((current) => Math.max(current - 1, 0))}
-                disabled={activeSessionIndex === 0}
-                aria-label="Ver entrenamiento anterior"
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              <p className="nutrition-slider-indicator">
-                Entreno {activeSessionIndex + 1} de {sessions.length}
+          {/* ── AI input form (inline) ── */}
+          {showAiForm && (
+            <div className="workout-ai-form">
+              <label className="workout-ai-label" htmlFor="ai-workout-input">
+                Describe tu entrenamiento
+              </label>
+              <p className="workout-ai-hint">
+                Ejemplo: <strong>45 min gym + 20 min trote medio</strong>
               </p>
-
-              <button
-                type="button"
-                className="nutrition-slider-nav"
-                onClick={() => setActiveSessionIndex((current) => Math.min(current + 1, sessions.length - 1))}
-                disabled={activeSessionIndex === sessions.length - 1}
-                aria-label="Ver entrenamiento siguiente"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
-            <div
-              className="nutrition-slider-window"
-              onTouchStart={handleSessionsTouchStart}
-              onTouchEnd={handleSessionsTouchEnd}
-            >
-              <div
-                className="nutrition-slider-track"
-                style={{ transform: `translate3d(-${activeSessionIndex * 100}%, 0, 0)` }}
-              >
-                {sessions.map((session) => (
-                  <article key={session.id} className="nutrition-meal-item workout-session-item">
-                    <div className="nutrition-meal-top">
-                      <div className="nutrition-meal-title-group">
-                        <p className="nutrition-meal-name">Entreno #{session.id}</p>
-                        <span className="nutrition-meal-type-badge workout">
-                          {session.source === 'ai' ? 'IA' : session.source}
-                        </span>
-                      </div>
-
-                      <div className="nutrition-meal-actions">
-                        <span className="nutrition-meal-time">
-                          {Math.round(session.total_kcal_est ?? 0)} kcal
-                        </span>
-                        <button
-                          type="button"
-                          className="nutrition-meal-delete"
-                          onClick={() => handleDeleteSession(session.id)}
-                          disabled={deletingSessionId === session.id}
-                          aria-label="Eliminar entrenamiento"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="workout-session-blocks">
-                      {session.blocks.map((block) => (
-                        <div key={block.id} className="workout-session-block-row">
-                          <span>Bloque {block.block_order}</span>
-                          <span>{block.duration_minutes} min</span>
-                          <span>{formatIntensityLabel(block.intensity_level)}</span>
-                          <strong>{Math.round(block.kcal_est ?? 0)} kcal</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                ))}
+              <textarea
+                id="ai-workout-input"
+                className="workout-ai-textarea"
+                placeholder="Ej: 30 min trote suave + 25 min pesas intenso"
+                rows={3}
+                value={aiInput}
+                onChange={(e) => { setSubmitError(''); setAiInput(e.target.value) }}
+              />
+              {parsedPreview.length > 0 && (
+                <div className="workout-preview">
+                  {parsedPreview.map((block, index) => (
+                    <span key={`${block.activity}-${index}`} className="workout-preview-chip">
+                      {block.activity} · {block.duration_minutes} min · {formatIntensityLabel(block.intensity)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {submitError && <p className="workout-form-error" role="alert">{submitError}</p>}
+              <div className="workout-ai-form-actions">
+                <button type="button" className="workout-ai-form-cancel" onClick={closeAiForm}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="workout-ai-form-submit"
+                  onClick={handleCreateSession}
+                  disabled={isSubmitting || !aiInput.trim()}
+                >
+                  <Sparkles size={14} />
+                  {isSubmitting ? 'Calculando...' : 'Guardar'}
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="nutrition-slider-dots" role="tablist" aria-label="Selector de entrenamientos">
-              {sessions.map((session, index) => (
-                <button
-                  key={session.id}
-                  type="button"
-                  className={`nutrition-slider-dot ${index === activeSessionIndex ? 'active' : ''}`}
-                  onClick={() => setActiveSessionIndex(index)}
-                  aria-label={`Ir al entrenamiento ${index + 1}`}
-                  aria-current={index === activeSessionIndex}
-                />
-              ))}
+          {isLoading ? (
+            <div className="workout-loading">
+              <div className="neon-loader neon-loader--sm" aria-hidden="true" />
+              <p>Cargando...</p>
             </div>
-          </div>
-        )}
-      </article>
+          ) : (
+            <>
+              {/* ── Próximo entreno / Empty state ── */}
+              {hasActiveRoutine && todaySession ? (
+                <div className={`workout-proximo-card${routineCompleted ? ' completed' : ''}`}>
+                  <div className="workout-proximo-top">
+                    <div className="workout-proximo-info">
+                      <p className="workout-proximo-section-label">Mi Rutina</p>
+                      <p className="workout-proximo-title">{todaySession.title}</p>
+                      <p className="workout-proximo-sub">
+                        {todaySession.exercises?.length ?? 0} ejercicios
+                      </p>
+                    </div>
+                    <span className={`workout-day-tag${routineCompleted ? ' done' : ''}`}>
+                      {routineCompleted ? '✓ ' : ''}
+                      {todaySession.day_label?.split('·')[0]?.trim() ?? 'HOY'}
+                    </span>
+                  </div>
+
+                  <div className="workout-proximo-pills">
+                    <span className="workout-proximo-pill">
+                      <Clock size={9} />
+                      {sessionDuration} min
+                    </span>
+                    <span className="workout-proximo-pill">
+                      <Flame size={9} />
+                      {routineKcal} kcal
+                    </span>
+                    <span className="workout-proximo-pill">Media</span>
+                  </div>
+
+                  <div className={`workout-toggle-row${routineCompleted ? ' done' : ''}`}>
+                    <div>
+                      <p className="workout-toggle-label">
+                        {routineCompleted ? 'Completado' : 'Marcar como completado'}
+                      </p>
+                      <p className="workout-toggle-sub">
+                        {routineCompleted
+                          ? `-${routineKcal} kcal aplicadas`
+                          : `Resta ${routineKcal} kcal del día`}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={routineCompleted}
+                      className={`workout-toggle-track${routineCompleted ? ' on' : ''}`}
+                      onClick={() => setRoutineCompleted((c) => !c)}
+                      aria-label="Marcar rutina como completada"
+                    >
+                      <span className="workout-toggle-thumb" />
+                    </button>
+                  </div>
+                </div>
+              ) : !hasActiveRoutine ? (
+                <div className="workout-empty-card">
+                  <Dumbbell size={22} className="workout-empty-icon" />
+                  <p className="workout-empty-title">Sin entreno programado</p>
+                  <p className="workout-empty-sub">
+                    No tenés una rutina activa. Ingresá un entreno por IA o subí tu rutina en la pestaña "Mi Rutina".
+                  </p>
+                </div>
+              ) : null}
+
+              {/* ── Entrenamientos de hoy ── */}
+              <div className="workout-historial-section">
+                <p className="workout-section-label">Entrenamientos de hoy</p>
+                <div className="workout-historial-card">
+                  {listError && <p className="workout-form-error">{listError}</p>}
+
+                  {sessions.length === 0 && !routineCompleted ? (
+                    <p className="workout-historial-empty">Sin entrenamientos registrados hoy</p>
+                  ) : (
+                    <>
+                      {/* Routine completed synthetic item */}
+                      {routineCompleted && todaySession && (
+                        <div className="workout-historial-item">
+                          <div className="workout-historial-info">
+                            <p className="workout-historial-name">
+                              {todaySession.title}
+                              <span className="workout-tag-rutina">Rutina</span>
+                            </p>
+                            <p className="workout-historial-meta">
+                              {sessionDuration} min · completado
+                            </p>
+                          </div>
+                          <span className="workout-historial-kcal">-{routineKcal} kcal</span>
+                        </div>
+                      )}
+
+                      {/* AI sessions */}
+                      {sessions.map((session) => (
+                        <div key={session.id} className="workout-historial-item">
+                          <div className="workout-historial-info">
+                            <p className="workout-historial-name">
+                              Entreno #{session.id}
+                              <span className="workout-tag-ia">IA</span>
+                            </p>
+                            <p className="workout-historial-meta">
+                              {session.blocks.reduce((sum, b) => sum + b.duration_minutes, 0)} min
+                            </p>
+                          </div>
+                          <div className="workout-historial-right">
+                            <span className="workout-historial-kcal">
+                              -{Math.round(session.total_kcal_est ?? 0)} kcal
+                            </span>
+                            <button
+                              type="button"
+                              className="workout-historial-delete"
+                              onClick={() => handleDeleteSession(session.id)}
+                              disabled={deletingSessionId === session.id}
+                              aria-label="Eliminar entrenamiento"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Calorías del día ── */}
+              {showCalories && (
+                <div className="workout-cal-section">
+                  <p className="workout-section-label">Calorías del día</p>
+                  <div className="workout-cal-card">
+                    <div className="workout-cal-row">
+                      <span className="workout-cal-name">Ingeridas</span>
+                      <span className="workout-cal-val">{Math.round(intakeKcal)} kcal</span>
+                    </div>
+                    <div className="workout-cal-row">
+                      <span className="workout-cal-name">Ejercicio</span>
+                      <span className="workout-cal-val neg">
+                        {exerciseKcal > 0 ? '-' : ''}{Math.round(exerciseKcal)} kcal
+                      </span>
+                    </div>
+                    <div className="workout-cal-row last">
+                      <span className="workout-cal-name">Neto</span>
+                      <span className={`workout-cal-val net${netKcal < 0 ? ' surplus' : ''}`}>
+                        {netKcal} kcal
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Routine day modal (bottom sheet) ── */}
+          {showRoutineModal && (
+            <div
+              className="workout-ia-overlay"
+              onClick={() => setShowRoutineModal(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Confirmar tipo de entreno"
+            >
+              <div className="workout-ia-sheet" onClick={(e) => e.stopPropagation()}>
+                <div className="workout-ia-handle" />
+                <p className="workout-ia-title">¿Este es tu entreno del día?</p>
+                <p className="workout-ia-sub">
+                  Tenés "{todaySession?.title ?? 'tu sesión'}" programado para hoy. Si este entreno
+                  reemplaza al de la rutina, no se contarán dos veces las calorías.
+                </p>
+                <button
+                  type="button"
+                  className="workout-ia-option"
+                  onClick={() => handleRoutineModalOption(true)}
+                >
+                  <p className="workout-ia-option-title">✓ Sí, reemplaza mi entreno de hoy</p>
+                  <p className="workout-ia-option-sub">
+                    Se marca "{todaySession?.title}" como completado automáticamente
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className="workout-ia-option"
+                  onClick={() => handleRoutineModalOption(false)}
+                >
+                  <p className="workout-ia-option-title">+ No, es un entreno extra</p>
+                  <p className="workout-ia-option-sub">
+                    Se registra aparte y las calorías se suman por separado
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className="workout-ia-cancel-btn"
+                  onClick={() => setShowRoutineModal(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </section>
   )
 }

@@ -43,18 +43,6 @@ class FatSecretFoodResult:
     serving_size_grams: float | None = None
 
 
-@dataclass
-class FatSecretNLPItem:
-    """Normalized item returned by FatSecret NLP endpoint."""
-
-    food_id: str
-    food_name: str
-    quantity_grams: float
-    total_calories: float
-    total_carbs: float
-    total_protein: float
-    total_fat: float
-
 
 def _safe_float(value: Any) -> float | None:
     if value is None:
@@ -358,85 +346,3 @@ def search_food_by_name(normalized_name: str) -> FatSecretFoodResult:
     raise FatSecretServiceError("food_not_found")
 
 
-def parse_natural_language_foods(user_input: str) -> list[FatSecretNLPItem]:
-    """Parse free text using FatSecret NLP and return normalized food items."""
-    text = user_input.strip()
-    if not text:
-        raise FatSecretServiceError("insufficient_data")
-
-    access_token = _get_access_token(scope="basic nlp")
-
-    try:
-        response = _FATSECRET_HTTP_CLIENT.post(
-            "https://platform.fatsecret.com/rest/natural-language-processing/v1",
-            json={
-                "user_input": text,
-                "include_food_data": False,
-            },
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-        )
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise FatSecretServiceError("fatsecret_nlp_request_failed") from exc
-
-    payload = response.json()
-    food_response = payload.get("food_response", []) if isinstance(payload, dict) else []
-    if not isinstance(food_response, list) or not food_response:
-        raise FatSecretServiceError("food_not_found")
-
-    normalized_items: list[FatSecretNLPItem] = []
-    for item in food_response:
-        if not isinstance(item, dict):
-            continue
-
-        food_id = str(item.get("food_id", "")).strip()
-        if not food_id:
-            continue
-
-        food_name = str(item.get("food_entry_name", "")).strip()
-        if not food_name:
-            food_name = "unknown"
-
-        eaten = item.get("eaten")
-        if not isinstance(eaten, dict):
-            continue
-
-        total_metric_amount = _safe_float(eaten.get("total_metric_amount"))
-        if total_metric_amount is None or total_metric_amount <= 0:
-            per_unit_metric_amount = _safe_float(eaten.get("per_unit_metric_amount"))
-            units = _safe_float(eaten.get("units"))
-            if per_unit_metric_amount is None or units is None:
-                continue
-            total_metric_amount = per_unit_metric_amount * units
-
-        nutrition = eaten.get("total_nutritional_content")
-        if not isinstance(nutrition, dict):
-            continue
-
-        calories = _safe_float(nutrition.get("calories"))
-        carbs = _safe_float(nutrition.get("carbohydrate"))
-        protein = _safe_float(nutrition.get("protein"))
-        fat = _safe_float(nutrition.get("fat"))
-
-        if calories is None:
-            continue
-
-        normalized_items.append(
-            FatSecretNLPItem(
-                food_id=food_id,
-                food_name=food_name,
-                quantity_grams=round(total_metric_amount, 2),
-                total_calories=round(calories, 2),
-                total_carbs=round(carbs or 0.0, 2),
-                total_protein=round(protein or 0.0, 2),
-                total_fat=round(fat or 0.0, 2),
-            )
-        )
-
-    if not normalized_items:
-        raise FatSecretServiceError("food_not_found")
-
-    return normalized_items

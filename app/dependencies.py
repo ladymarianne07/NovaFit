@@ -70,7 +70,31 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     """
     if not current_user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorMessages.INACTIVE_USER
+        )
+    return current_user
+
+
+from .services.notification_service import NotificationService
+from .services.trainer_service import TrainerService
+
+
+def get_notification_service(db: Session = Depends(get_database_session)) -> NotificationService:
+    """Notification service dependency injection"""
+    return NotificationService(db)
+
+
+def get_trainer_service(db: Session = Depends(get_database_session)) -> TrainerService:
+    """Trainer service dependency injection"""
+    return TrainerService(db)
+
+
+def get_current_trainer(current_user: User = Depends(get_current_active_user)) -> User:
+    """Dependency that enforces the current user is a trainer."""
+    if current_user.role != "trainer":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Esta acción requiere una cuenta de entrenador.",
         )
     return current_user

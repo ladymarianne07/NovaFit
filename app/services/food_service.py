@@ -7,6 +7,7 @@ import re
 
 from ..models.food import FoodEntry
 from ..schemas.food import (
+    ConfirmedMealsRequest,
     FoodItemDistributionResponse,
     FoodParseCalculateResponse,
     FoodParseLogResponse,
@@ -413,6 +414,7 @@ class FoodService:
         day_total_protein = 0.0
         day_total_fat = 0.0
         generic_meal_counter = 0
+        had_zero_intake = False
         nutrition_cache_by_name: dict[str, tuple[str, float, float, float, float, float]] = {}
         portion_cache_by_food_and_unit: dict[tuple[str, str], float] = {}
 
@@ -421,6 +423,9 @@ class FoodService:
             try:
                 parsed_items = parse_food_input(segment_text)
             except FoodParserError as exc:
+                if str(exc) == "zero_intake":
+                    had_zero_intake = True
+                    continue
                 raise FoodServiceError(str(exc)) from exc
 
             parsed_items = cls._normalize_ambiguous_items(parsed_items, segment_text)
@@ -452,25 +457,45 @@ class FoodService:
                 if not normalized_name:
                     continue
 
-                (
-                    usda_fdc_id,
-                    quantity_grams,
-                    calories_per_100g,
-                    carbs_per_100g,
-                    protein_per_100g,
-                    fat_per_100g,
-                    total_calories,
-                    total_carbs,
-                    total_protein,
-                    total_fat,
-                ) = cls._resolve_item_nutrition(
-                    db=db,
-                    normalized_name=normalized_name,
-                    quantity=parsed.quantity,
-                    unit=parsed.unit,
-                    nutrition_cache_by_name=nutrition_cache_by_name,
-                    portion_cache_by_food_and_unit=portion_cache_by_food_and_unit,
-                )
+                if parsed.is_supplement:
+                    # Supplements contribute 0 macros — skip external nutrition lookup.
+                    try:
+                        quantity_grams = convert_to_grams(parsed.quantity, parsed.unit, normalized_name)
+                    except FoodParserError:
+                        quantity_grams = max(parsed.quantity, 1.0)
+                    usda_fdc_id = "supplement"
+                    calories_per_100g = carbs_per_100g = protein_per_100g = fat_per_100g = 0.0
+                    total_calories = total_carbs = total_protein = total_fat = 0.0
+                    logger.info("parse_and_log stage=supplement food=%s qty=%.2fg", normalized_name, quantity_grams)
+                else:
+                    try:
+                        (
+                            usda_fdc_id,
+                            quantity_grams,
+                            calories_per_100g,
+                            carbs_per_100g,
+                            protein_per_100g,
+                            fat_per_100g,
+                            total_calories,
+                            total_carbs,
+                            total_protein,
+                            total_fat,
+                        ) = cls._resolve_item_nutrition(
+                            db=db,
+                            normalized_name=normalized_name,
+                            quantity=parsed.quantity,
+                            unit=parsed.unit,
+                            nutrition_cache_by_name=nutrition_cache_by_name,
+                            portion_cache_by_food_and_unit=portion_cache_by_food_and_unit,
+                        )
+                    except FoodServiceError as exc:
+                        logger.warning(
+                            "parse_and_log stage=skip_item food=%s reason=%s",
+                            normalized_name,
+                            exc,
+                        )
+                        continue
+
                 logger.info(
                     "parse_and_log stage=resolve_item food=%s duration_ms=%.2f",
                     normalized_name,
@@ -556,11 +581,322 @@ class FoodService:
             day_total_fat += meal_total_fat
 
         if not meals_response:
+            if had_zero_intake:
+                return FoodParseLogResponse(
+                    meals=[],
+                    total_quantity_grams=0.0,
+                    total_calories=0.0,
+                    total_carbs=0.0,
+                    total_protein=0.0,
+                    total_fat=0.0,
+                )
             raise FoodServiceError("insufficient_data")
 
         db.commit()
         logger.info(
             "parse_and_log stage=total meals=%s duration_ms=%.2f",
+            len(meals_response),
+            (perf_counter() - overall_start) * 1000,
+        )
+
+        return FoodParseLogResponse(
+            meals=meals_response,
+            total_quantity_grams=round(day_total_quantity_grams, 2),
+            total_calories=round(day_total_calories, 2),
+            total_carbs=round(day_total_carbs, 2),
+            total_protein=round(day_total_protein, 2),
+            total_fat=round(day_total_fat, 2),
+        )
+
+    @classmethod
+    def parse_and_preview_meals(cls, db: Session, text: str) -> FoodParseLogResponse:
+        """
+        Parse free-form meal text and compute nutrition WITHOUT writing anything to the database.
+        Returns the same shape as parse_and_log_meals for use in a confirmation step.
+        """
+        overall_start = perf_counter()
+        sections = split_text_by_meal_type(text)
+        if not sections:
+            raise FoodServiceError("insufficient_data")
+
+        meals_response: list[ParsedMealResponse] = []
+        day_total_quantity_grams = 0.0
+        day_total_calories = 0.0
+        day_total_carbs = 0.0
+        day_total_protein = 0.0
+        day_total_fat = 0.0
+        generic_meal_counter = 0
+        had_zero_intake = False
+        nutrition_cache_by_name: dict[str, tuple[str, float, float, float, float, float]] = {}
+        portion_cache_by_food_and_unit: dict[tuple[str, str], float] = {}
+
+        for meal_type, segment_text in sections:
+            try:
+                parsed_items = parse_food_input(segment_text)
+            except FoodParserError as exc:
+                if str(exc) == "zero_intake":
+                    had_zero_intake = True
+                    continue
+                raise FoodServiceError(str(exc)) from exc
+
+            parsed_items = cls._normalize_ambiguous_items(parsed_items, segment_text)
+
+            meal_items: list[FoodItemDistributionResponse] = []
+            meal_total_quantity_grams = 0.0
+            meal_total_calories = 0.0
+            meal_total_carbs = 0.0
+            meal_total_protein = 0.0
+            meal_total_fat = 0.0
+
+            meal_label = meal_label_for_type(meal_type)
+            if meal_type == "meal":
+                generic_meal_counter += 1
+                meal_label = f"Comida {generic_meal_counter}"
+
+            for parsed in parsed_items:
+                normalized_name = parsed.name.strip().lower()
+                if not normalized_name:
+                    continue
+
+                if parsed.is_supplement:
+                    try:
+                        quantity_grams = convert_to_grams(parsed.quantity, parsed.unit, normalized_name)
+                    except FoodParserError:
+                        quantity_grams = max(parsed.quantity, 1.0)
+                    calories_per_100g = carbs_per_100g = protein_per_100g = fat_per_100g = 0.0
+                    total_calories = total_carbs = total_protein = total_fat = 0.0
+                else:
+                    try:
+                        (
+                            _,
+                            quantity_grams,
+                            calories_per_100g,
+                            carbs_per_100g,
+                            protein_per_100g,
+                            fat_per_100g,
+                            total_calories,
+                            total_carbs,
+                            total_protein,
+                            total_fat,
+                        ) = cls._resolve_item_nutrition(
+                            db=db,
+                            normalized_name=normalized_name,
+                            quantity=parsed.quantity,
+                            unit=parsed.unit,
+                            nutrition_cache_by_name=nutrition_cache_by_name,
+                            portion_cache_by_food_and_unit=portion_cache_by_food_and_unit,
+                        )
+                    except FoodServiceError as exc:
+                        logger.warning(
+                            "parse_preview stage=skip_item food=%s reason=%s",
+                            normalized_name,
+                            exc,
+                        )
+                        continue
+
+                meal_items.append(
+                    FoodItemDistributionResponse(
+                        food=normalized_name,
+                        quantity_grams=quantity_grams,
+                        calories_per_100g=round(calories_per_100g, 2),
+                        carbs_per_100g=round(carbs_per_100g, 2),
+                        protein_per_100g=round(protein_per_100g, 2),
+                        fat_per_100g=round(fat_per_100g, 2),
+                        total_calories=round(total_calories, 2),
+                        total_carbs=round(total_carbs, 2),
+                        total_protein=round(total_protein, 2),
+                        total_fat=round(total_fat, 2),
+                    )
+                )
+
+                meal_total_quantity_grams += quantity_grams
+                meal_total_calories += total_calories
+                meal_total_carbs += total_carbs
+                meal_total_protein += total_protein
+                meal_total_fat += total_fat
+
+            if not meal_items:
+                continue
+
+            meals_response.append(
+                ParsedMealResponse(
+                    meal_type=meal_type,
+                    meal_label=meal_label,
+                    meal_timestamp=datetime.now(timezone.utc),
+                    items=meal_items,
+                    total_quantity_grams=round(meal_total_quantity_grams, 2),
+                    total_calories=round(meal_total_calories, 2),
+                    total_carbs=round(meal_total_carbs, 2),
+                    total_protein=round(meal_total_protein, 2),
+                    total_fat=round(meal_total_fat, 2),
+                )
+            )
+
+            day_total_quantity_grams += meal_total_quantity_grams
+            day_total_calories += meal_total_calories
+            day_total_carbs += meal_total_carbs
+            day_total_protein += meal_total_protein
+            day_total_fat += meal_total_fat
+
+        if not meals_response:
+            if had_zero_intake:
+                return FoodParseLogResponse(
+                    meals=[],
+                    total_quantity_grams=0.0,
+                    total_calories=0.0,
+                    total_carbs=0.0,
+                    total_protein=0.0,
+                    total_fat=0.0,
+                )
+            raise FoodServiceError("insufficient_data")
+
+        logger.info(
+            "parse_preview stage=total meals=%s duration_ms=%.2f",
+            len(meals_response),
+            (perf_counter() - overall_start) * 1000,
+        )
+
+        return FoodParseLogResponse(
+            meals=meals_response,
+            total_quantity_grams=round(day_total_quantity_grams, 2),
+            total_calories=round(day_total_calories, 2),
+            total_carbs=round(day_total_carbs, 2),
+            total_protein=round(day_total_protein, 2),
+            total_fat=round(day_total_fat, 2),
+        )
+
+    @classmethod
+    def log_confirmed_meals(
+        cls, db: Session, user_id: int, request: ConfirmedMealsRequest
+    ) -> FoodParseLogResponse:
+        """
+        Persist user-confirmed (and optionally edited) meal items to the database.
+        Recalculates totals server-side from the submitted per-100g values and quantity_grams.
+        """
+        overall_start = perf_counter()
+
+        meals_by_label: dict[str, list] = {}
+        for item in request.items:
+            key = f"{item.meal_type}|{item.meal_label}"
+            meals_by_label.setdefault(key, []).append(item)
+
+        meals_response: list[ParsedMealResponse] = []
+        day_total_quantity_grams = 0.0
+        day_total_calories = 0.0
+        day_total_carbs = 0.0
+        day_total_protein = 0.0
+        day_total_fat = 0.0
+
+        for key, items in meals_by_label.items():
+            meal_type, meal_label = key.split("|", 1)
+            meal_group_id = uuid4().hex
+            meal_items: list[FoodItemDistributionResponse] = []
+            meal_total_quantity_grams = 0.0
+            meal_total_calories = 0.0
+            meal_total_carbs = 0.0
+            meal_total_protein = 0.0
+            meal_total_fat = 0.0
+            meal_timestamp: datetime | None = None
+
+            for confirmed in items:
+                quantity_grams = confirmed.quantity_grams
+                calories_per_100g = confirmed.calories_per_100g
+                carbs_per_100g = confirmed.carbs_per_100g
+                protein_per_100g = confirmed.protein_per_100g
+                fat_per_100g = confirmed.fat_per_100g
+
+                total_calories = round((calories_per_100g / 100.0) * quantity_grams, 2)
+                total_carbs = round((carbs_per_100g / 100.0) * quantity_grams, 2)
+                total_protein = round((protein_per_100g / 100.0) * quantity_grams, 2)
+                total_fat = round((fat_per_100g / 100.0) * quantity_grams, 2)
+
+                normalized_name = confirmed.food_name.strip().lower()
+                usda_fdc_id = "confirmed" if confirmed.is_supplement else "user_confirmed"
+
+                db.add(
+                    FoodEntry(
+                        original_text=confirmed.food_name.strip(),
+                        normalized_name=normalized_name,
+                        quantity_grams=quantity_grams,
+                        usda_fdc_id=usda_fdc_id,
+                        calories_per_100g=calories_per_100g,
+                        total_calories=total_calories,
+                    )
+                )
+
+                logged_meal = NutritionService.log_meal(
+                    db=db,
+                    user_id=user_id,
+                    meal_data=MealLogCreate(
+                        meal_type=meal_type,
+                        meal_group_id=meal_group_id,
+                        meal_label=meal_label,
+                        food_name=normalized_name,
+                        quantity_grams=quantity_grams,
+                        calories_per_100g=calories_per_100g,
+                        carbs_per_100g=carbs_per_100g,
+                        protein_per_100g=protein_per_100g,
+                        fat_per_100g=fat_per_100g,
+                    ),
+                    auto_commit=False,
+                )
+
+                if meal_timestamp is None:
+                    meal_timestamp = logged_meal.event_timestamp
+
+                meal_items.append(
+                    FoodItemDistributionResponse(
+                        food=normalized_name,
+                        quantity_grams=quantity_grams,
+                        calories_per_100g=round(calories_per_100g, 2),
+                        carbs_per_100g=round(carbs_per_100g, 2),
+                        protein_per_100g=round(protein_per_100g, 2),
+                        fat_per_100g=round(fat_per_100g, 2),
+                        total_calories=total_calories,
+                        total_carbs=total_carbs,
+                        total_protein=total_protein,
+                        total_fat=total_fat,
+                    )
+                )
+
+                meal_total_quantity_grams += quantity_grams
+                meal_total_calories += total_calories
+                meal_total_carbs += total_carbs
+                meal_total_protein += total_protein
+                meal_total_fat += total_fat
+
+            if not meal_items:
+                continue
+
+            if meal_timestamp is None:
+                meal_timestamp = datetime.now(timezone.utc)
+
+            meals_response.append(
+                ParsedMealResponse(
+                    meal_type=meal_type,
+                    meal_label=meal_label,
+                    meal_timestamp=meal_timestamp,
+                    items=meal_items,
+                    total_quantity_grams=round(meal_total_quantity_grams, 2),
+                    total_calories=round(meal_total_calories, 2),
+                    total_carbs=round(meal_total_carbs, 2),
+                    total_protein=round(meal_total_protein, 2),
+                    total_fat=round(meal_total_fat, 2),
+                )
+            )
+
+            day_total_quantity_grams += meal_total_quantity_grams
+            day_total_calories += meal_total_calories
+            day_total_carbs += meal_total_carbs
+            day_total_protein += meal_total_protein
+            day_total_fat += meal_total_fat
+
+        if not meals_response:
+            raise FoodServiceError("insufficient_data")
+
+        db.commit()
+        logger.info(
+            "log_confirmed stage=total meals=%s duration_ms=%.2f",
             len(meals_response),
             (perf_counter() - overall_start) * 1000,
         )

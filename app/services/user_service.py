@@ -16,8 +16,10 @@ from ..core.custom_exceptions import (
     UserAlreadyExistsError,
     UserNotFoundError,
     InvalidCredentialsError,
-    InactiveUserError
+    InactiveUserError,
+    BiometricValidationError,
 )
+from ..schemas.user import UserRole
 
 
 class UserService:
@@ -62,35 +64,47 @@ class UserService:
             first_name=user_data.first_name,
             last_name=user_data.last_name
         )
-        
-        # Validate biometric data
-        ValidationService.validate_biometric_data(
-            age=user_data.age,
-            gender=user_data.gender.value,
-            weight=user_data.weight,
-            height=user_data.height,
-            activity_level=user_data.activity_level.value
+
+        # Trainers who explicitly opt out of personal use skip biometric requirements
+        is_trainer_no_self = (
+            user_data.role == UserRole.TRAINER
+            and user_data.uses_app_for_self is False
         )
-        
+
+        has_biometrics = self._has_complete_biometric_data(user_data)
+
+        if not is_trainer_no_self:
+            if not has_biometrics:
+                raise BiometricValidationError({"error": "Biometric data is required"})
+            ValidationService.validate_biometric_data(
+                age=user_data.age,
+                gender=user_data.gender.value,
+                weight=user_data.weight,
+                height=user_data.height,
+                activity_level=user_data.activity_level.value
+            )
+
         # STEP 2: Check if user already exists
         existing_user = self.get_user_by_email(user_data.email)
         if existing_user:
             raise UserAlreadyExistsError(ErrorMessages.EMAIL_ALREADY_EXISTS)
-        
-        # STEP 3: Calculate metrics (all biometric data is now required and validated)
+
+        # STEP 3: Calculate metrics if biometrics are present
         bmr, daily_caloric_expenditure = self._calculate_user_metrics(user_data)
-        
+
         # STEP 4: Truncate password if needed for bcrypt compatibility
         safe_password = ValidationService.truncate_password_if_needed(user_data.password)
-        
+
         # STEP 5: Create user instance
         hashed_password = get_password_hash(safe_password)
-        
+
         db_user = User(
             email=user_data.email,
             hashed_password=hashed_password,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
+            role=user_data.role.value if user_data.role else "student",
+            uses_app_for_self=user_data.uses_app_for_self,
             age=user_data.age,
             gender=user_data.gender.value if user_data.gender else None,
             weight_kg=user_data.weight,
@@ -101,17 +115,17 @@ class UserService:
             objective=user_data.objective.value if user_data.objective else None,
             aggressiveness_level=user_data.aggressiveness_level
         )
-        
+
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)
-        
-        # STEP 6: Calculate objective-based targets if objective is specified
-        if db_user.objective:
-            objective_targets = BiometricService.calculate_and_store_objective_targets(db_user)
+
+        # STEP 6: Calculate objective-based targets if objective and biometrics are present
+        if db_user.objective and has_biometrics:
+            BiometricService.calculate_and_store_objective_targets(db_user)
             self.db.commit()
             self.db.refresh(db_user)
-        
+
         return db_user
     
     def authenticate_user(self, email: str, password: str) -> User:
@@ -401,6 +415,27 @@ class UserService:
         except Exception as e:
             self.db.rollback()
             raise e
+
+    def enable_trainer_self_use(self, user: User, data) -> User:
+        """Enable personal app usage for a trainer and initialize their biometric profile."""
+        biometric_update = UserBiometricsUpdate(
+            age=data.age,
+            gender=data.gender,
+            weight=data.weight,
+            height=data.height,
+            activity_level=data.activity_level,
+        )
+        # update_user_biometrics handles BMR/TDEE recalculation and commits
+        user = self.update_user_biometrics(user, biometric_update)
+
+        user.uses_app_for_self = True
+        self.db.commit()
+        self.db.refresh(user)
+
+        if data.objective:
+            user = self.update_user_objective(user, data.objective.value, data.aggressiveness_level or 2)
+
+        return user
 
     def update_user_nutrition_targets(
         self,

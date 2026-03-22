@@ -1,10 +1,14 @@
 import React from 'react'
 import { LogOut, UserRound } from 'lucide-react'
+import NotificationBell from './NotificationBell'
+import { UserRole } from '../services/api'
+import Logo from './Logo'
 
 interface DashboardHeaderProps {
   activeTab: string
   onTabChange: (tab: string) => void
   onLogout: () => void
+  role?: UserRole
 }
 
 const TAB_TITLES: Record<string, string> = {
@@ -12,20 +16,22 @@ const TAB_TITLES: Record<string, string> = {
   profile: 'Perfil',
   meals: 'Comidas',
   training: 'Entrenamiento',
-  progress: 'Progreso'
+  progress: 'Progreso',
+  students: 'Alumnos',
 }
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   activeTab,
   onTabChange,
   onLogout,
+  role,
 }) => {
   const title = TAB_TITLES[activeTab] || 'Inicio'
 
   return (
     <header className="dashboard-global-header" aria-label="Header principal">
       <div className="dashboard-global-header-brand">
-        <img src="/Logo.png" alt="NovaFitness" className="dashboard-global-header-logo" />
+        <Logo size={28} className="dashboard-global-header-logo" />
         <div className="dashboard-global-header-text">
           <p className="dashboard-global-header-app">NovaFitness</p>
           <h1 className="dashboard-global-header-title">{title}</h1>
@@ -33,6 +39,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
 
       <div className="dashboard-global-header-actions">
+        <NotificationBell />
+
         <button
           type="button"
           className={`dashboard-global-header-btn ${activeTab === 'profile' ? 'active' : ''}`}
@@ -40,7 +48,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           aria-label="Ir a perfil"
         >
           <UserRound size={16} />
-          <span>Perfil</span>
+          <span>{role === 'trainer' ? 'Mi Perfil' : 'Perfil'}</span>
         </button>
 
         <button

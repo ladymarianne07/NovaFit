@@ -36,6 +36,12 @@ class AggressivenessLevel(int, Enum):
     AGGRESSIVE = 3                   # Aggressive approach
 
 
+class UserRole(str, Enum):
+    """User roles in the system"""
+    STUDENT = "student"
+    TRAINER = "trainer"
+
+
 class MacronutrientTargets(BaseModel):
     """Computed macronutrient targets based on objective"""
     target_calories: float = Field(..., description="Target daily calories based on objective")
@@ -75,13 +81,29 @@ class UserBiometrics(BaseModel):
     activity_level: ActivityLevel = Field(..., description="Daily activity level (required)")
 
 
-class UserCreate(UserBase, UserBiometrics):
-    """User creation schema with biometric data and fitness objective"""
+class UserCreate(UserBase):
+    """User creation schema with optional biometric data and fitness objective.
+
+    Biometric fields are required for students and for trainers who use the app
+    for themselves (uses_app_for_self=True). Trainers who only manage students
+    (uses_app_for_self=False) may omit them.
+    """
     password: str = Field(
-        ..., 
-        min_length=DatabaseConstants.MIN_PASSWORD_LENGTH, 
+        ...,
+        min_length=DatabaseConstants.MIN_PASSWORD_LENGTH,
         description=f"Password (min {DatabaseConstants.MIN_PASSWORD_LENGTH} characters)"
     )
+    role: UserRole = Field(default=UserRole.STUDENT, description="User role: student or trainer")
+    uses_app_for_self: Optional[bool] = Field(
+        None,
+        description="Trainers only: whether they also use the app to track their own fitness"
+    )
+    # Biometric fields — required for students and trainers with uses_app_for_self=True
+    age: Optional[int] = Field(None, ge=BiometricConstants.MIN_AGE, le=BiometricConstants.MAX_AGE)
+    gender: Optional[Gender] = Field(None)
+    weight: Optional[float] = Field(None, ge=BiometricConstants.MIN_WEIGHT, le=BiometricConstants.MAX_WEIGHT)
+    height: Optional[float] = Field(None, ge=BiometricConstants.MIN_HEIGHT, le=BiometricConstants.MAX_HEIGHT)
+    activity_level: Optional[ActivityLevel] = Field(None)
     objective: Optional[FitnessObjective] = Field(
         None,
         description="Fitness objective (MAINTENANCE, FAT_LOSS, MUSCLE_GAIN, BODY_RECOMP, PERFORMANCE)"
@@ -184,9 +206,11 @@ class UserResponse(UserBase):
     """User response schema (excludes sensitive data)"""
     id: int
     is_active: bool
+    role: UserRole = Field(default=UserRole.STUDENT, description="User role")
+    uses_app_for_self: Optional[bool] = Field(None, description="Trainers only: whether they use the app for themselves")
     created_at: datetime
     last_login: Optional[datetime] = None
-    
+
     # Biometric data (required in the response if user is fully registered)
     age: Optional[int] = Field(None, description="Age in years")
     gender: Optional[Gender] = Field(None, description="Gender")

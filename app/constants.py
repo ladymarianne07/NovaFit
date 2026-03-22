@@ -29,10 +29,7 @@ class ErrorMessages:
 # Success Messages
 class SuccessMessages:
     """Centralized success messages"""
-    USER_REGISTERED = "User registered successfully"
-    LOGIN_SUCCESS = "Login successful"
     LOGOUT_SUCCESS = "Logout successful"
-    PROFILE_UPDATED = "Profile updated successfully"
     
 
 # Database Constants
@@ -226,7 +223,8 @@ class WorkoutConstants:
     SOURCE_AI = "ai"
     SOURCE_MANUAL = "manual"
     SOURCE_IMPORT = "import"
-    VALID_SOURCES = {SOURCE_AI, SOURCE_MANUAL, SOURCE_IMPORT}
+    SOURCE_ROUTINE = "routine"
+    VALID_SOURCES = {SOURCE_AI, SOURCE_MANUAL, SOURCE_IMPORT, SOURCE_ROUTINE}
 
     STATUS_DRAFT = "draft"
     STATUS_FINAL = "final"
@@ -244,3 +242,84 @@ class WorkoutConstants:
     # Defaults
     DEFAULT_INTENSITY_ESTIMATE = INTENSITY_MEDIUM
     DEFAULT_CORRECTION_FACTOR = 1.0
+
+
+class TrainerConstants:
+    """Constants for the personal trainer module."""
+
+    # Invite code
+    INVITE_CODE_LENGTH = 8
+    INVITE_EXPIRY_DAYS = 7
+    MAX_NOTIFICATIONS_RETURNED = 50
+
+    # Trainer-student link statuses
+    LINK_STATUS_ACTIVE = "active"
+    LINK_STATUS_REVOKED = "revoked"
+
+    # Notification types
+    NOTIF_STUDENT_EDITED_BIOMETRICS = "student_edited_biometrics"
+    NOTIF_STUDENT_EDITED_OBJECTIVE = "student_edited_objective"
+    NOTIF_STUDENT_EDITED_NUTRITION = "student_edited_nutrition_targets"
+    NOTIF_TRAINER_EDITED_BIOMETRICS = "trainer_edited_biometrics"
+    NOTIF_TRAINER_EDITED_OBJECTIVE = "trainer_edited_objective"
+    NOTIF_TRAINER_EDITED_NUTRITION = "trainer_edited_nutrition_targets"
+    NOTIF_INVITE_ACCEPTED = "invite_accepted"
+
+    # Notification field label map (for message body)
+    FIELD_GROUP_LABELS = {
+        "biometrics": "datos biométricos",
+        "objective": "objetivo de entrenamiento",
+        "nutrition_targets": "metas de nutrición",
+    }
+
+
+class RoutineConstants:
+    """Constants for the AI-powered routine upload and session log module."""
+
+    # Routine status lifecycle
+    STATUS_PROCESSING = "processing"
+    STATUS_READY = "ready"
+    STATUS_ERROR = "error"
+    VALID_STATUSES = {STATUS_PROCESSING, STATUS_READY, STATUS_ERROR}
+
+    # File upload limits
+    MAX_FILE_SIZE_MB = 10
+    MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+    # Supported MIME types for routine upload
+    ALLOWED_MIME_TYPES = {
+        "text/plain",
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+
+    # Gemini timeout (larger files need more time)
+    GEMINI_TIMEOUT_SECONDS = 60.0
+
+    # Source types
+    SOURCE_FILE = "file"
+    SOURCE_AI_TEXT = "ai_text"
+
+    # Objectives
+    OBJECTIVE_FAT_LOSS = "fat_loss"
+    OBJECTIVE_BODY_RECOMP = "body_recomp"
+    OBJECTIVE_MUSCLE_GAIN = "muscle_gain"
+    VALID_OBJECTIVES = {OBJECTIVE_FAT_LOSS, OBJECTIVE_BODY_RECOMP, OBJECTIVE_MUSCLE_GAIN}
+
+    # Frequency options
+    FREQUENCY_LOW = "2"
+    FREQUENCY_MEDIUM = "3-4"
+    FREQUENCY_HIGH = "5+"
+
+    # Experience levels
+    EXPERIENCE_BEGINNER = "principiante"
+    EXPERIENCE_INTERMEDIATE = "intermedio"
+    EXPERIENCE_ADVANCED = "avanzado"
+
+    # Equipment options
+    EQUIPMENT_GYM = "gimnasio completo"
+    EQUIPMENT_DUMBBELLS = "mancuernas en casa"
+    EQUIPMENT_BANDS = "bandas elásticas"
+    EQUIPMENT_BODYWEIGHT = "peso corporal"

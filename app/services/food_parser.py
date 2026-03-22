@@ -45,6 +45,9 @@ PORTION_UNIT_TO_GRAMS_GENERIC: dict[str, float] = {
     "tsp": 5.0,
     "cucharadita": 5.0,
     "cucharaditas": 5.0,
+    # Colloquial vessel units — fallback if Gemini doesn't convert them to ml
+    "vaso": 250.0,
+    "vasos": 250.0,
 }
 
 FOOD_SPECIFIC_PORTION_GRAMS: dict[str, dict[str, float]] = {
@@ -363,6 +366,9 @@ def parse_food_input(text: str) -> list[ParsedFoodPayload]:
         data: Any = parse_food_with_gemini(text)
     except AIParserError as exc:
         raise FoodParserError(str(exc)) from exc
+
+    if isinstance(data, dict) and data.get("zero_intake") is True:
+        raise FoodParserError("zero_intake")
 
     if isinstance(data, dict) and data.get("error"):
         if data.get("error") == "invalid_domain":

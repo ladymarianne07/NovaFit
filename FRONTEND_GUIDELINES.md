@@ -277,6 +277,182 @@ export const authAPI = new AuthAPI();
 
 ---
 
+## 🎨 **Theming System — 3 Themes**
+
+NovaFitness tiene 3 temas que el usuario puede elegir. Todo nuevo componente o módulo **debe funcionar correctamente en los 3**. El tema activo se aplica como atributo `data-theme` en el elemento `<html>`.
+
+### Temas disponibles
+
+| Tema | `data-theme` | Paleta | Accent |
+|---|---|---|---|
+| **Original** | *(sin atributo / default)* | Fondo violeta/púrpura degradado | `#00f2c3` (cyan-verde) |
+| **Dark** | `data-theme="dark"` | Fondo negro/carbón | `#00f5ff` (cyan eléctrico) |
+| **Light** | `data-theme="light"` | Fondo cyan claro | `#00c8d8` (teal) |
+
+### CSS Variables de tema — siempre usarlas
+
+Nunca hardcodear colores en componentes nuevos. Usar siempre estas variables que se definen en `index.html`:
+
+```css
+/* Accent principal — cambia según el tema */
+color: var(--theme-accent);               /* #00f2c3 / #00f5ff / #00c8d8 */
+background: var(--theme-accent-glow);     /* glow suave del accent */
+border-color: var(--theme-accent-border); /* borde semitransparente del accent */
+background: var(--theme-accent-gradient); /* gradiente de 2 colores del tema */
+background: var(--theme-accent-gradient-full); /* gradiente completo 3 colores */
+
+/* Fondo de página */
+background: var(--theme-bg-gradient);
+background: var(--theme-bg-overlay);
+
+/* Navegación inferior */
+background: var(--theme-nav-bg);
+color: var(--theme-nav-item-color);
+color: var(--theme-nav-item-active-color);
+
+/* Header */
+background: var(--theme-header-bg);
+color: var(--theme-header-text);
+color: var(--theme-header-text-sub);
+
+/* Botones del header */
+background: var(--theme-header-btn-bg);
+background: var(--theme-header-btn-active);
+```
+
+### Cómo escribir overrides de light mode
+
+Los estilos base son para el tema Original/Dark (fondo oscuro, texto blanco). Al final de `globals.css` se agregan overrides específicos para light mode:
+
+```css
+/* ✅ Patrón correcto para soportar light mode */
+.mi-componente-titulo {
+  color: rgba(255, 255, 255, 0.9); /* base: dark/original */
+}
+
+.mi-componente-card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: white;
+}
+
+/* Al final del archivo — overrides light */
+[data-theme="light"] .mi-componente-titulo {
+  color: rgba(10, 26, 30, 0.85); /* texto oscuro en fondo claro */
+}
+
+[data-theme="light"] .mi-componente-card {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(10, 26, 30, 0.15);
+  color: #0a1a1e;
+}
+```
+
+### Paleta de colores por función (todos los temas)
+
+Usar siempre colores del design system para pills y badges, no genéricos:
+
+```css
+/* Calorías / primario */   → rosa/magenta:  rgba(236, 72, 153, ...)  + rgba(168, 85, 247, ...)
+/* Carbohidratos */          → cyan:          rgba(0, 242, 195, ...)   + rgba(6, 182, 212, ...)
+/* Proteínas */              → violeta:       rgba(139, 92, 246, ...)  + rgba(99, 102, 241, ...)
+/* Grasas / secundario */    → teal-azul:     rgba(6, 182, 212, ...)   + rgba(14, 165, 233, ...)
+/* Quemado / negativo */     → rosa:          rgba(236, 72, 153, ...)
+/* Neto / resultado */       → violeta:       rgba(139, 92, 246, ...)
+```
+
+### Logo
+
+Usar siempre el componente SVG `<Logo>` de `components/Logo.tsx`. Toma el color del tema via `currentColor`:
+
+```tsx
+import Logo from '../components/Logo'
+
+// En un header pequeño
+<Logo size={28} className="mi-header-logo" />
+
+// En una pantalla de inicio
+<Logo size={120} className="mi-logo-grande" />
+```
+
+```css
+/* En el CSS — solo asignar color y opcionalmente drop-shadow */
+.mi-header-logo {
+  color: var(--theme-accent);
+  filter: drop-shadow(0 0 10px var(--theme-accent-glow));
+}
+```
+
+---
+
+## 🗂️ **Patrón de Tabs — Módulos y Perfil**
+
+Todos los módulos con múltiples secciones deben usar el mismo patrón de tabs. **No inventar variantes nuevas.**
+
+### Estructura JSX
+
+```tsx
+// ✅ Patrón estándar de tabs para módulos
+type ModuleTab = 'seccion1' | 'seccion2'
+const [activeTab, setActiveTab] = useState<ModuleTab>('seccion1')
+
+// En el JSX:
+<div className="module-tabs" role="tablist">
+  <button
+    className={`module-tab ${activeTab === 'seccion1' ? 'active' : ''}`}
+    onClick={() => setActiveTab('seccion1')}
+    role="tab"
+    aria-selected={activeTab === 'seccion1'}
+  >
+    <IconName size={18} />
+    <span>Sección 1</span>
+  </button>
+  <button
+    className={`module-tab ${activeTab === 'seccion2' ? 'active' : ''}`}
+    onClick={() => setActiveTab('seccion2')}
+    role="tab"
+    aria-selected={activeTab === 'seccion2'}
+  >
+    <OtroIcon size={18} />
+    <span>Sección 2</span>
+  </button>
+</div>
+
+{activeTab === 'seccion1' ? (
+  <div>contenido sección 1</div>
+) : (
+  <div>contenido sección 2</div>
+)}
+```
+
+### CSS — reutilizar siempre las clases existentes
+
+Las clases `.module-tabs` y `.module-tab` ya están definidas en `globals.css` con soporte para los 3 temas. No crear nuevas variantes:
+
+```css
+/* ✅ Ya definido — solo usar */
+.module-tabs        → contenedor flex de tabs
+.module-tab         → botón individual (icon arriba + label + underline animado)
+.module-tab.active  → tab seleccionado con accent color y underline
+```
+
+### Diseño visual del tab
+- Ícono arriba, label abajo (columna)
+- Estado activo: color `var(--theme-accent)` + borde inferior de 2px
+- Estado inactivo: texto semitransparente, sin borde
+- Transición suave `0.2s ease`
+- En light mode: texto oscuro, activo en `--theme-accent` del tema claro
+
+### Módulos existentes con tabs (referencia)
+
+| Módulo | Tabs |
+|---|---|
+| `NutritionModule.tsx` | Mis Comidas · Mi Dieta |
+| `WorkoutModule.tsx` | Mis Entrenos · Mi Rutina |
+| `ProfileBiometricsPanel.tsx` | Datos personales · Metas nutricionales · Pliegues cutáneos |
+
+---
+
 ## 🎨 **Styling Guidelines**
 
 ### 1. CSS Custom Properties
@@ -288,20 +464,20 @@ export const authAPI = new AuthAPI();
   --color-secondary: #8b5cf6;
   --color-neutral-50: #f9fafb;
   --color-neutral-100: #f3f4f6;
-  
+
   /* Gradients */
   --gradient-primary: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
-  
+
   /* Spacing */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
-  
+
   /* Border radius */
   --radius: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
-  
+
   /* Shadows */
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
@@ -699,6 +875,5 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 
 ---
 
-*Based on NovaFitness codebase - February 8, 2026*
-*Branch: RegisterFlow*
-*Version: 1.0*
+*Based on NovaFitness codebase — Updated March 2026*
+*Version: 2.0 — Theming system + Tab pattern added*

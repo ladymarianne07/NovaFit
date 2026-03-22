@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Brain, ChevronLeft, ChevronRight, Clock3, Mic, MicOff, Sparkles, Trash2 } from 'lucide-react'
-import { foodAPI, nutritionAPI, MealGroupResponse } from '../services/api'
+import { Brain, ChevronLeft, ChevronRight, Clock3, Mic, MicOff, Salad, Sparkles, Trash2 } from 'lucide-react'
+import { foodAPI, nutritionAPI, MealGroupResponse, FoodParseLogResponse, ConfirmMealsRequest } from '../services/api'
+import AiMealConfirmModal from './AiMealConfirmModal'
 
 interface NutritionModuleProps {
   className?: string
@@ -253,6 +254,9 @@ const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructor | null 
 const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => {
   const [meals, setMeals] = useState<MealGroupResponse[]>([])
   const [isAiComposerOpen, setIsAiComposerOpen] = useState(false)
+  const [moduleTab, setModuleTab] = useState<'meals' | 'diet'>('meals')
+  const [previewData, setPreviewData] = useState<FoodParseLogResponse | null>(null)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
   const [aiMealInput, setAiMealInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingMeals, setIsLoadingMeals] = useState(true)
@@ -413,13 +417,9 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       setIsSubmitting(true)
       setErrorMessage('')
 
-      await foodAPI.parseAndLog({ text: content })
-      await fetchMeals()
-
-      window.dispatchEvent(new Event('nutrition:updated'))
-
-      setAiMealInput('')
-      setIsAiComposerOpen(false)
+      const parsed = await foodAPI.parsePreview({ text: content })
+      setPreviewData(parsed)
+      setIsConfirmModalOpen(true)
     } catch (error: any) {
       const backendError = error?.response?.data
 
@@ -439,6 +439,21 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleConfirmMeals = async (request: ConfirmMealsRequest) => {
+    await foodAPI.confirmAndLog(request)
+    await fetchMeals()
+    window.dispatchEvent(new Event('nutrition:updated'))
+    setIsConfirmModalOpen(false)
+    setPreviewData(null)
+    setAiMealInput('')
+    setIsAiComposerOpen(false)
+  }
+
+  const handleCloseConfirmModal = () => {
+    setIsConfirmModalOpen(false)
+    setPreviewData(null)
   }
 
   const handleDeleteMeal = async (mealGroupId: string) => {
@@ -483,6 +498,35 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
 
   return (
     <section className={`nutrition-module ${className}`.trim()} aria-label="Módulo de alimentación">
+      <div className="module-tabs" role="tablist" aria-label="Secciones de alimentación">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={moduleTab === 'meals'}
+          className={`module-tab ${moduleTab === 'meals' ? 'active' : ''}`}
+          onClick={() => setModuleTab('meals')}
+        >
+          <Clock3 size={20} />
+          <span>Mis Comidas</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={moduleTab === 'diet'}
+          className={`module-tab ${moduleTab === 'diet' ? 'active' : ''}`}
+          onClick={() => setModuleTab('diet')}
+        >
+          <Salad size={20} />
+          <span>Mi Dieta</span>
+        </button>
+      </div>
+
+      {moduleTab === 'diet' ? (
+        <article className="nutrition-card nutrition-main-panel module-placeholder-card">
+          <p className="module-placeholder-text">Mi Dieta — próximamente.</p>
+        </article>
+      ) : (
+        <>
       <div className="nutrition-top-action">
         <button
           type="button"
@@ -697,6 +741,17 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
           </div>
         )}
       </article>
+        </>
+      )}
+
+      <AiMealConfirmModal
+        isOpen={isConfirmModalOpen}
+        previewData={previewData}
+        onClose={handleCloseConfirmModal}
+        onConfirm={handleConfirmMeals}
+        isSubmitting={isSubmitting}
+        translateFoodName={translateFoodName}
+      />
     </section>
   )
 }

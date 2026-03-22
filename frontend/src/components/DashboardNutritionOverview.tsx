@@ -43,11 +43,13 @@ const DashboardNutritionOverview: React.FC<DashboardNutritionOverviewProps> = ({
       </header>
 
       <div className="dashboard-overview-calories">
-        <div className="dashboard-overview-calories-icon" aria-hidden="true">
-          <Flame size={20} />
-        </div>
-        <div className="dashboard-overview-calories-main">
+        <div className="dashboard-overview-calories-left">
+          <div className="dashboard-overview-calories-icon" aria-hidden="true">
+            <Flame size={20} />
+          </div>
           <p className="dashboard-overview-calories-label">{calorieLabel}</p>
+        </div>
+        <div className="dashboard-overview-calories-right">
           <p className="dashboard-overview-calories-value">
             {currentCalories.toLocaleString('en-US')} <span>cal</span>
           </p>

@@ -6,12 +6,12 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .config import settings
-from .api import auth, users, events, nutrition, workout
+from .api import auth, users, events, nutrition, workout, routine, trainer, notifications, invite
 from .routers import food
 from .db.database import create_tables, get_missing_user_columns
 from .constants import AppConstants, StatusCodes
 from .core.custom_exceptions import (
-    NovaFitnessException, 
+    NovaFitnessException,
     BiometricValidationError,
     IncompleteBiometricDataError,
     BiometricCalculationError,
@@ -21,7 +21,13 @@ from .core.custom_exceptions import (
     NameValidationError,
     InputValidationError,
     UserAlreadyExistsError,
-    InvalidCredentialsError
+    InvalidCredentialsError,
+    TrainerOnlyError,
+    InviteNotFoundError,
+    InviteAlreadyUsedError,
+    InviteExpiredError,
+    StudentAlreadyLinkedError,
+    StudentNotLinkedError,
 )
 
 # Configure logging
@@ -211,6 +217,49 @@ def setup_exception_handlers(app: FastAPI) -> None:
             }
         )
     
+    @app.exception_handler(TrainerOnlyError)
+    async def trainer_only_exception_handler(request: Request, exc: TrainerOnlyError):
+        """Handle trainer-only access violations"""
+        return JSONResponse(
+            status_code=StatusCodes.FORBIDDEN,
+            content={"detail": exc.message, "error_code": "TRAINER_ONLY"}
+        )
+
+    @app.exception_handler(InviteNotFoundError)
+    async def invite_not_found_exception_handler(request: Request, exc: InviteNotFoundError):
+        return JSONResponse(
+            status_code=StatusCodes.NOT_FOUND,
+            content={"detail": exc.message, "error_code": "INVITE_NOT_FOUND"}
+        )
+
+    @app.exception_handler(InviteAlreadyUsedError)
+    async def invite_already_used_exception_handler(request: Request, exc: InviteAlreadyUsedError):
+        return JSONResponse(
+            status_code=StatusCodes.CONFLICT,
+            content={"detail": exc.message, "error_code": "INVITE_ALREADY_USED"}
+        )
+
+    @app.exception_handler(InviteExpiredError)
+    async def invite_expired_exception_handler(request: Request, exc: InviteExpiredError):
+        return JSONResponse(
+            status_code=410,
+            content={"detail": exc.message, "error_code": "INVITE_EXPIRED"}
+        )
+
+    @app.exception_handler(StudentAlreadyLinkedError)
+    async def student_already_linked_exception_handler(request: Request, exc: StudentAlreadyLinkedError):
+        return JSONResponse(
+            status_code=StatusCodes.CONFLICT,
+            content={"detail": exc.message, "error_code": "STUDENT_ALREADY_LINKED"}
+        )
+
+    @app.exception_handler(StudentNotLinkedError)
+    async def student_not_linked_exception_handler(request: Request, exc: StudentNotLinkedError):
+        return JSONResponse(
+            status_code=StatusCodes.NOT_FOUND,
+            content={"detail": exc.message, "error_code": "STUDENT_NOT_LINKED"}
+        )
+
     @app.exception_handler(NovaFitnessException)
     async def nova_fitness_exception_handler(request: Request, exc: NovaFitnessException):
         """Handle custom NovaFitness exceptions"""
@@ -242,6 +291,10 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(events.router)
     app.include_router(nutrition.router)
     app.include_router(workout.router)
+    app.include_router(routine.router)
+    app.include_router(trainer.router)
+    app.include_router(notifications.router)
+    app.include_router(invite.router)
     app.include_router(food.router)
     app.include_router(food.router, prefix="/api")
     

@@ -9,13 +9,14 @@ class FoodParseRequest(BaseModel):
 
 
 class ParsedFoodPayload(BaseModel):
-    """Strict payload expected from AI parser component."""
+    """Payload produced by AI parser. Unknown fields are silently ignored."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     name: str = Field(..., min_length=1, max_length=200)
     quantity: float = Field(..., gt=0)
     unit: str = Field(..., min_length=1, max_length=20)
+    is_supplement: bool = False
 
 
 class FoodParseCalculateResponse(BaseModel):
@@ -71,6 +72,26 @@ class FoodParseLogResponse(BaseModel):
     total_carbs: float
     total_protein: float
     total_fat: float
+
+
+class ConfirmedFoodItem(BaseModel):
+    """One food item submitted by the user after reviewing the AI preview."""
+
+    meal_type: str = Field(..., min_length=1, max_length=50)
+    meal_label: str = Field(..., min_length=1, max_length=100)
+    food_name: str = Field(..., min_length=1, max_length=200)
+    quantity_grams: float = Field(..., gt=0)
+    calories_per_100g: float = Field(..., ge=0)
+    carbs_per_100g: float = Field(..., ge=0)
+    protein_per_100g: float = Field(..., ge=0)
+    fat_per_100g: float = Field(..., ge=0)
+    is_supplement: bool = False
+
+
+class ConfirmedMealsRequest(BaseModel):
+    """Payload for the confirm-and-log endpoint."""
+
+    items: list[ConfirmedFoodItem] = Field(..., min_length=1)
 
 
 class FoodEntryResponse(BaseModel):

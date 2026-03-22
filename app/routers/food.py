@@ -6,7 +6,12 @@ from starlette.concurrency import run_in_threadpool
 from ..dependencies import get_current_user
 from ..db.database import get_database_session
 from ..db.models import User
-from ..schemas.food import FoodParseCalculateResponse, FoodParseLogResponse, FoodParseRequest
+from ..schemas.food import (
+    ConfirmedMealsRequest,
+    FoodParseCalculateResponse,
+    FoodParseLogResponse,
+    FoodParseRequest,
+)
 from ..services.food_service import FoodService, FoodServiceError
 from ..services.food_aggregator_service import FoodAggregatorService
 from ..schemas.food_normalized import FoodNormalized
@@ -151,3 +156,74 @@ async def parse_and_log_food(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "food_processing_failed"},
         )
+
+
+def _handle_food_service_error(error_code: str) -> JSONResponse:
+    if error_code == "invalid_domain":
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"error": "invalid_domain"},
+        )
+    if error_code in {"insufficient_data", "malformed_parser_response"}:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"error": "insufficient_data"},
+        )
+    if error_code in {"invalid_json_response", "malformed_ai_response", "empty_ai_response"}:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": "invalid_parser_response"},
+        )
+    if error_code == "gemini_quota_exceeded":
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": error_code},
+        )
+    if error_code in {"missing_gemini_api_key", "gemini_request_failed", "gemini_model_not_found"}:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": error_code},
+        )
+    if error_code == "missing_usda_api_key":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "USDA API key is not configured"},
+        )
+    if error_code in {"food_not_found", "no_calorie_data", "usda_request_failed", "unsupported_unit", "low_similarity_match"}:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": error_code},
+        )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "food_processing_failed"},
+    )
+
+
+@router.post("/parse-preview", response_model=FoodParseLogResponse)
+async def parse_preview_food(
+    payload: FoodParseRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_database_session),
+):
+    """Parse free-text meals and return itemized nutrition preview WITHOUT logging to database."""
+    try:
+        result = await run_in_threadpool(FoodService.parse_and_preview_meals, db, payload.text)
+        return result
+    except FoodServiceError as exc:
+        return _handle_food_service_error(str(exc))
+
+
+@router.post("/confirm-and-log", response_model=FoodParseLogResponse)
+async def confirm_and_log_food(
+    payload: ConfirmedMealsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_database_session),
+):
+    """Log user-confirmed (and optionally edited) meal items to the database."""
+    try:
+        user_id: int = current_user.id  # type: ignore
+        result = await run_in_threadpool(FoodService.log_confirmed_meals, db, user_id, payload)
+        return result
+    except FoodServiceError as exc:
+        return _handle_food_service_error(str(exc))

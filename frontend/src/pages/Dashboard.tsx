@@ -10,6 +10,10 @@ import ProgressModule from '../components/ProgressModule'
 import ProfileBiometricsPanel from '../components/ProfileBiometricsPanel'
 import DashboardNutritionOverview from '../components/DashboardNutritionOverview'
 import DashboardBodyComposition from '../components/DashboardBodyComposition'
+import TrainerStudentsModule from '../components/TrainerStudentsModule'
+import TrainerStudentHome from '../components/TrainerStudentHome'
+import { StudentSummary, trainerAPI } from '../services/api'
+
 import {
   nutritionAPI,
   MacronutrientData,
@@ -20,9 +24,11 @@ import {
   WorkoutDailyEnergyResponse,
 } from '../services/api'
 
-type DashboardTab = 'dashboard' | 'profile' | 'meals' | 'training' | 'progress'
+type DashboardTab = 'dashboard' | 'profile' | 'meals' | 'training' | 'progress' | 'students'
 
-const MAIN_TAB_ORDER: Array<Exclude<DashboardTab, 'profile'>> = ['dashboard', 'meals', 'training', 'progress']
+const STUDENT_TAB_ORDER: Array<Exclude<DashboardTab, 'profile'>> = ['dashboard', 'meals', 'training', 'progress']
+const TRAINER_TAB_ORDER: Array<Exclude<DashboardTab, 'profile'>> = ['dashboard', 'students']
+const TRAINER_FULL_TAB_ORDER: Array<Exclude<DashboardTab, 'profile'>> = ['dashboard', 'meals', 'training', 'progress', 'students']
 
 const Dashboard: React.FC = () => {
   const { user, logout, updateBiometrics } = useAuth()
@@ -35,6 +41,8 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [trainerStudents, setTrainerStudents] = useState<StudentSummary[]>([])
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
 
   const loadNutritionData = async () => {
     try {
@@ -77,8 +85,16 @@ const Dashboard: React.FC = () => {
     }
   }
 
+  const role = user?.role ?? 'student'
+  const usesAppForSelf = user?.uses_app_for_self ?? false
+  const MAIN_TAB_ORDER =
+    role === 'trainer'
+      ? usesAppForSelf ? TRAINER_FULL_TAB_ORDER : TRAINER_TAB_ORDER
+      : STUDENT_TAB_ORDER
+
   const handleTabChange = (tab: string) => {
-    if ((['dashboard', 'profile', 'meals', 'training', 'progress'] as DashboardTab[]).includes(tab as DashboardTab)) {
+    const valid: DashboardTab[] = ['dashboard', 'profile', 'meals', 'training', 'progress', 'students']
+    if (valid.includes(tab as DashboardTab)) {
       setActiveTab(tab as DashboardTab)
     }
   }
@@ -125,10 +141,12 @@ const Dashboard: React.FC = () => {
     await loadNutritionData()
   }
 
-  // Load nutrition data on component mount
+  // Load nutrition data on component mount — skip for trainers who don't use the app for themselves
   useEffect(() => {
-    if (user) {
+    if (user && (user.role !== 'trainer' || user.uses_app_for_self)) {
       loadNutritionData()
+    } else {
+      setLoading(false)
     }
   }, [user])
 
@@ -146,6 +164,15 @@ const Dashboard: React.FC = () => {
       window.removeEventListener('nutrition:updated', handler)
       window.removeEventListener('workout:updated', handler)
       window.removeEventListener('skinfolds:updated', handler)
+    }
+  }, [user])
+
+  // Load student list for trainer-no-self
+  useEffect(() => {
+    if (user?.role === 'trainer') {
+      trainerAPI.listStudents()
+        .then(setTrainerStudents)
+        .catch(() => setTrainerStudents([]))
     }
   }, [user])
 
@@ -171,45 +198,59 @@ const Dashboard: React.FC = () => {
         : 2000
   }
 
-  const renderDashboardContent = () => (
-    <section className="dashboard-main-stack" aria-label="Panel principal del dashboard">
-      <div className="dashboard-overview-wrap">
-        {macroData ? (
-          <>
-            <DashboardNutritionOverview
-              currentCalories={getCurrentCalories()}
-              targetCalories={getTargetCalories()}
-              macroData={macroData}
-              calorieMode={dailyWorkoutEnergy ? 'net' : 'intake'}
-              exerciseCalories={dailyWorkoutEnergy?.exercise_kcal_est ?? 0}
-              macroTargetPercentages={{
-                carbs: user?.carbs_target_percent ?? 50,
-                protein: user?.protein_target_percent ?? 25,
-                fat: user?.fat_target_percent ?? 25,
-              }}
-            />
-            <DashboardBodyComposition
-              latestMeasurement={latestSkinfold}
-              currentWeight={user?.weight}
-              onWeightUpdate={handleWeightUpdate}
-            />
-          </>
-        ) : (
-          <section className="dashboard-placeholder-card">
-            <div className="loading-stack">
-              <div className="neon-loader neon-loader--md" aria-hidden="true"></div>
-              <h2>Cargando resumen</h2>
-              <p>Estamos preparando tus métricas de calorías y macronutrientes.</p>
-            </div>
-          </section>
-        )}
-      </div>
+  const renderDashboardContent = () => {
+    if (role === 'trainer' && !usesAppForSelf) {
+      return (
+        <section className="dashboard-tab-content">
+          <TrainerStudentHome
+            students={trainerStudents}
+            selectedStudentId={selectedStudentId}
+            onStudentSelect={setSelectedStudentId}
+          />
+        </section>
+      )
+    }
 
-      <div className="dashboard-suggestion-wrap">
-        <SuggestionCard suggestion={suggestion} loading={loading} />
-      </div>
-    </section>
-  )
+    return (
+      <section className="dashboard-main-stack" aria-label="Panel principal del dashboard">
+        <div className="dashboard-overview-wrap">
+          {macroData ? (
+            <>
+              <DashboardNutritionOverview
+                currentCalories={getCurrentCalories()}
+                targetCalories={getTargetCalories()}
+                macroData={macroData}
+                calorieMode={dailyWorkoutEnergy ? 'net' : 'intake'}
+                exerciseCalories={dailyWorkoutEnergy?.exercise_kcal_est ?? 0}
+                macroTargetPercentages={{
+                  carbs: user?.carbs_target_percent ?? 50,
+                  protein: user?.protein_target_percent ?? 25,
+                  fat: user?.fat_target_percent ?? 25,
+                }}
+              />
+              <DashboardBodyComposition
+                latestMeasurement={latestSkinfold}
+                currentWeight={user?.weight}
+                onWeightUpdate={handleWeightUpdate}
+              />
+            </>
+          ) : loading ? (
+            <section className="dashboard-placeholder-card">
+              <div className="loading-stack">
+                <div className="neon-loader neon-loader--md" aria-hidden="true"></div>
+                <h2>Cargando resumen</h2>
+                <p>Estamos preparando tus métricas de calorías y macronutrientes.</p>
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        <div className="dashboard-suggestion-wrap">
+          <SuggestionCard suggestion={suggestion} loading={loading} />
+        </div>
+      </section>
+    )
+  }
 
   const activeMainTab = activeTab === 'profile' ? 'dashboard' : activeTab
   const activeIndex = MAIN_TAB_ORDER.indexOf(activeMainTab)
@@ -245,6 +286,7 @@ const Dashboard: React.FC = () => {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         onLogout={handleRequestLogout}
+        role={role}
       />
 
       <div className="login-content dashboard-content">
@@ -275,23 +317,51 @@ const Dashboard: React.FC = () => {
                 {renderDashboardContent()}
               </div>
 
-              <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'meals'}>
-                <section className="dashboard-tab-content">
-                  <NutritionModule className="mb-6" />
-                </section>
-              </div>
+              {role === 'trainer' && !usesAppForSelf ? (
+                // Trainer without self-use: only students panel
+                <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'students'}>
+                  <section className="dashboard-tab-content">
+                    <TrainerStudentsModule
+                      students={trainerStudents}
+                      selectedStudentId={selectedStudentId}
+                      onStudentSelect={setSelectedStudentId}
+                    />
+                  </section>
+                </div>
+              ) : (
+                // Student, or trainer who also uses the app for themselves
+                <>
+                  <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'meals'}>
+                    <section className="dashboard-tab-content">
+                      <NutritionModule className="mb-6" />
+                    </section>
+                  </div>
 
-              <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'training'}>
-                <section className="dashboard-tab-content">
-                  <WorkoutModule className="mb-6" />
-                </section>
-              </div>
+                  <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'training'}>
+                    <section className="dashboard-tab-content">
+                      <WorkoutModule className="mb-6" />
+                    </section>
+                  </div>
 
-              <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'progress'}>
-                <section className="dashboard-tab-content">
-                  <ProgressModule className="mb-6" />
-                </section>
-              </div>
+                  <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'progress'}>
+                    <section className="dashboard-tab-content">
+                      <ProgressModule className="mb-6" />
+                    </section>
+                  </div>
+
+                  {role === 'trainer' && (
+                    <div className="dashboard-slide-panel" aria-hidden={activeTab !== 'students'}>
+                      <section className="dashboard-tab-content">
+                        <TrainerStudentsModule
+                          students={trainerStudents}
+                          selectedStudentId={selectedStudentId}
+                          onStudentSelect={setSelectedStudentId}
+                        />
+                      </section>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </section>
         )}
@@ -322,9 +392,11 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Bottom Navigation */}
-      <BottomNavigation 
+      <BottomNavigation
         activeTab={activeTab}
         onTabChange={handleTabChange}
+        role={role}
+        usesAppForSelf={usesAppForSelf}
       />
     </div>
   )

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import { ValidationService } from '../services/validation'
 import { requiredFieldMessage, translateValidationMessage } from '../services/validationMessages'
+import Logo from '../components/Logo'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -81,7 +82,7 @@ const Login: React.FC = () => {
       <div className="login-content">
         {/* Header with Logo */}
         <div className="login-header">
-          <img src="/Logo.png" alt="NovaFitness Logo" className="login-logo-image" />
+          <Logo size={120} className="login-logo-svg" />
           <h1 className="login-title"> 
             <span className="login-title-brand">NovaFitness</span>
           </h1>

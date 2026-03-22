@@ -22,6 +22,13 @@ REQUIRED_USER_COLUMNS: dict[str, str] = {
     "carbs_target_percent": "REAL",
     "protein_target_percent": "REAL",
     "fat_target_percent": "REAL",
+    "role": "VARCHAR(20) DEFAULT 'student'",
+}
+
+REQUIRED_ROUTINE_COLUMNS: dict[str, str] = {
+    "source_type": "VARCHAR(20) DEFAULT 'file'",
+    "health_analysis": "TEXT",
+    "intake_data": "TEXT",
 }
 
 
@@ -77,24 +84,29 @@ def ensure_schema_compatibility() -> None:
     if "sqlite" not in settings.DATABASE_URL:
         return
 
-    missing_columns = get_missing_user_columns()
-
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
     if "food_portion_cache" not in table_names:
         logger.info("Creating missing table: food_portion_cache")
         Base.metadata.create_all(bind=engine)
 
-    if not missing_columns:
-        return
+    missing_user_cols = get_missing_user_columns()
+    if missing_user_cols:
+        logger.info("Detected missing users columns: %s", ", ".join(missing_user_cols))
+        with engine.begin() as connection:
+            for column_name in missing_user_cols:
+                column_type = REQUIRED_USER_COLUMNS[column_name]
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
+                logger.info("Added missing column users.%s", column_name)
 
-    logger.info("Detected missing users columns: %s", ", ".join(missing_columns))
-
-    with engine.begin() as connection:
-        for column_name in missing_columns:
-            column_type = REQUIRED_USER_COLUMNS[column_name]
-            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
-            logger.info("Added missing column users.%s", column_name)
+    missing_routine_cols = get_missing_routine_columns()
+    if missing_routine_cols:
+        logger.info("Detected missing user_routines columns: %s", ", ".join(missing_routine_cols))
+        with engine.begin() as connection:
+            for column_name in missing_routine_cols:
+                column_type = REQUIRED_ROUTINE_COLUMNS[column_name]
+                connection.execute(text(f"ALTER TABLE user_routines ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
+                logger.info("Added missing column user_routines.%s", column_name)
 
 
 def get_missing_user_columns() -> list[str]:
@@ -113,6 +125,26 @@ def get_missing_user_columns() -> list[str]:
     return [
         column_name
         for column_name in REQUIRED_USER_COLUMNS.keys()
+        if column_name not in existing_columns
+    ]
+
+
+def get_missing_routine_columns() -> list[str]:
+    """Return missing required columns in user_routines table for SQLite databases."""
+    if "sqlite" not in settings.DATABASE_URL:
+        return []
+
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    if "user_routines" not in table_names:
+        return []  # Table doesn't exist yet; create_all handles it
+
+    existing_columns = {column["name"] for column in inspector.get_columns("user_routines")}
+
+    return [
+        column_name
+        for column_name in REQUIRED_ROUTINE_COLUMNS.keys()
         if column_name not in existing_columns
     ]
 
