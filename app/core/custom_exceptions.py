@@ -153,3 +153,15 @@ class StudentAlreadyLinkedError(NovaFitnessException):
 class StudentNotLinkedError(NovaFitnessException):
     """Raised when a student is not linked to the requesting trainer."""
     pass
+
+
+# ── Diet module exceptions ─────────────────────────────────────────────────────
+
+class DietNotFoundError(NovaFitnessException):
+    """Raised when the user has no active diet plan."""
+    pass
+
+
+class DietParsingError(NovaFitnessException):
+    """Raised when Gemini fails to generate or parse a diet plan."""
+    pass

@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Clock, Dumbbell, Flame, ListChecks, SkipForward, Sparkles, Trash2 } from 'lucide-react'
 import RoutineModule from './RoutineModule'
+import RoutineLogModal from './RoutineLogModal'
 import {
   routineAPI,
   UserRoutineResponse,
   RoutineSession,
+  WorkoutSessionResponse,
   workoutAPI,
   WorkoutDailyEnergyResponse,
   WorkoutSessionCreateRequest,
-  WorkoutSessionResponse,
 } from '../services/api'
 
 interface WorkoutModuleProps {
@@ -429,6 +430,7 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
   // ── Advance state ────────────────────────────────────────────────────────
   const [isAdvancing, setIsAdvancing] = useState(false)
   const [advanceError, setAdvanceError] = useState('')
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
 
   // ── AI flow state ────────────────────────────────────────────────────────
   const [showAiForm, setShowAiForm] = useState(false)
@@ -499,6 +501,18 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
     } finally {
       setIsAdvancing(false)
     }
+  }
+
+  // Called when RoutineLogModal confirms — advances the index silently.
+  const handleLogModalConfirmed = async (_logged: WorkoutSessionResponse) => {
+    setShowCompleteModal(false)
+    try {
+      const updated = await routineAPI.advanceSession({ action: 'skip' })
+      setRoutine(updated)
+    } catch {
+      // Index advance is best-effort; calories were already saved by the modal.
+    }
+    await fetchWorkoutData()
   }
 
   // ── AI form ──────────────────────────────────────────────────────────────
@@ -689,12 +703,12 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
                     <button
                       type="button"
                       className="workout-advance-btn complete"
-                      onClick={() => handleAdvance('complete')}
+                      onClick={() => setShowCompleteModal(true)}
                       disabled={isAdvancing}
                       aria-label="Marcar entrenamiento como completado"
                     >
                       <Check size={15} />
-                      {isAdvancing ? 'Guardando...' : 'Completar'}
+                      Completar
                     </button>
                     <button
                       type="button"
@@ -704,7 +718,7 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
                       aria-label="Saltar este entrenamiento"
                     >
                       <SkipForward size={15} />
-                      Saltar
+                      {isAdvancing ? 'Guardando...' : 'Saltar'}
                     </button>
                   </div>
                 </div>
@@ -823,6 +837,14 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
           )}
         </>
       )}
+
+      {/* ── Complete session modal ── */}
+      <RoutineLogModal
+        isOpen={showCompleteModal}
+        sessions={currentSession ? [currentSession] : (routine?.routine_data?.sessions ?? [])}
+        onClose={() => setShowCompleteModal(false)}
+        onLogged={handleLogModalConfirmed}
+      />
     </section>
   )
 }

@@ -59,12 +59,29 @@ The JSON must follow this exact structure:
       "focus": "Espalda + Bíceps"
     }
   ],
+  "month_data": [
+    {
+      "month": 1,
+      "sets": "3–4 series",
+      "reps": "15–20 reps",
+      "rest_seconds": 75,
+      "note": "Mes de adaptación: Trabajá con peso moderado, priorizá la técnica en cada ejercicio."
+    },
+    {
+      "month": 2,
+      "sets": "4 series",
+      "reps": "8–10 reps",
+      "rest_seconds": 90,
+      "note": "Mes de fuerza: Subí los pesos progresivamente. Los movimientos deben ser explosivos en la fase concéntrica."
+    }
+  ],
   "sessions": [
     {
       "id": "upper_a",
       "color": "#c8f55a",
       "day_label": "Lunes · Upper A",
       "title": "Espalda + Bíceps",
+      "session_duration_minutes": 60,
       "estimated_calories_per_session": 320,
       "exercises": [
         {
@@ -72,9 +89,6 @@ The JSON must follow this exact structure:
           "name": "Jalón al pecho agarre ancho",
           "muscle": "Dorsal alto",
           "group": "Espalda",
-          "sets": "4",
-          "reps": "10-12",
-          "rest_seconds": 90,
           "estimated_calories": 45,
           "notes": ""
         }
@@ -88,11 +102,13 @@ Rules:
 - phases: one per training month (Mes 1, Mes 2...). Reflect objective-appropriate progressions.
 - schedule: one entry per training day in the week. Rest days labelled "Descanso".
 - sessions: one per training day. id must be short, lowercase, alphanumeric with underscores, no spaces.
+- session_duration_minutes: realistic session length matching intake data (default 60 if not specified).
 - colors: assign distinct hex colors per session from: #c8f55a, #f5c85a, #f55a8a, #5af0f5, #a78bfa, #fb923c
 - estimated_calories_per_session: realistic for resistance training (200–500 kcal).
 - estimated_calories per exercise: realistic for all sets of that exercise (20–80 kcal).
-- rest_seconds: appropriate for the objective (fat_loss: 45–90s, body_recomp: 60–120s, muscle_gain: 90–180s).
-- notes: optional technique cue or modification note for that exercise.
+- month_data: one entry per training month. sets/reps/rest_seconds MUST vary between months to reflect progressive overload (Mes 1 = higher reps / shorter rest → last month = lower reps / heavier load / longer rest). The note field should explain the training focus for that month in plain Spanish. For single-month plans, include exactly one entry.
+- notes: optional technique cue or modification note for that specific exercise (empty string if none).
+- Exercises do NOT have sets/reps fields — those come from month_data globally.
 - Exactly 5 exercises per session (no more, no less).
 - Keep all text in Spanish (rioplatense tone where applicable).
 """
@@ -444,6 +460,29 @@ class RoutineService:
     # ── Session logging ───────────────────────────────────────────────────────
 
     @classmethod
+    def _calc_routine_kcal(
+        cls,
+        *,
+        exercises: list[dict[str, Any]],
+        skipped_ids: list[str],
+        ai_estimated_kcal: float,
+    ) -> tuple[float, float]:
+        """Return (base_kcal, adjusted_kcal) using the AI estimate scaled proportionally for skips.
+
+        The AI-generated estimated_calories_per_session already accounts for exercise type,
+        sets, reps, and rest periods — making it a better base than a raw MET × duration
+        formula (which treats rest time as active work and overestimates for resistance training).
+        Skipped exercises reduce the total proportionally by exercise count.
+        """
+        n_total = len(exercises)
+        n_done = max(0, n_total - sum(1 for ex in exercises if ex.get("id") in skipped_ids))
+        scale = (n_done / n_total) if n_total > 0 else 1.0
+
+        base_kcal = round(ai_estimated_kcal, 2)
+        adjusted_kcal = round(base_kcal * scale, 2)
+        return base_kcal, adjusted_kcal
+
+    @classmethod
     def log_session(
         cls,
         db: Session,
@@ -452,9 +491,14 @@ class RoutineService:
         session_id: str,
         session_date: date,
         skipped_exercise_ids: list[str],
+        extra_exercises: list[dict[str, Any]],
         weight_kg: float,
     ) -> WorkoutSession:
-        """Create a WorkoutSession from a routine session with optional skipped exercises."""
+        """Create a WorkoutSession from a routine session with optional skipped/extra exercises.
+
+        Calories are calculated via MET × weight × hours (resistance training baseline),
+        scaled proportionally for skipped exercises, plus extra exercises via their own MET values.
+        """
         routine = cls.get_active_routine(db, user_id=user_id)
 
         routine_data = cast(Any, routine).routine_data or {}
@@ -464,13 +508,33 @@ class RoutineService:
         if target is None:
             raise RoutineNotFoundError(f"Session '{session_id}' not found in routine.")
 
-        total_calories = float(target.get("estimated_calories_per_session", 0.0))
-        skipped_calories = sum(
-            float(ex.get("estimated_calories", 0.0))
-            for ex in target.get("exercises", [])
-            if ex.get("id") in skipped_exercise_ids
+        exercises: list[dict[str, Any]] = target.get("exercises", [])
+        ai_estimated_kcal = float(target.get("estimated_calories_per_session", 0.0))
+
+        # Routine base: AI estimate scaled proportionally for skipped exercises.
+        # MET × full-session-time overestimates resistance training because rest periods
+        # (60-120 s between sets) are counted as active work. The AI estimate already
+        # reflects the actual exercise structure including those rest periods.
+        base_kcal, routine_kcal = cls._calc_routine_kcal(
+            exercises=exercises,
+            skipped_ids=skipped_exercise_ids,
+            ai_estimated_kcal=ai_estimated_kcal,
         )
-        adjusted_calories = max(0.0, total_calories - skipped_calories)
+
+        # Extra exercises: MET × weight × hours — appropriate here because extras are
+        # typically continuous activities (cardio, walking, HIIT) where MET is accurate.
+        from ..schemas.routine import EXTRA_EXERCISE_MET
+        extra_kcal = sum(
+            round(
+                EXTRA_EXERCISE_MET.get(ex.get("exercise_type", "resistance"), 4.5)
+                * weight_kg
+                * (int(ex.get("duration_minutes", 0)) / 60.0),
+                2,
+            )
+            for ex in extra_exercises
+        )
+
+        total_kcal = round(routine_kcal + extra_kcal, 2)
 
         session = WorkoutSession(
             user_id=user_id,
@@ -481,14 +545,16 @@ class RoutineService:
             ai_output={
                 "session_id": session_id,
                 "session_title": target.get("title"),
-                "total_calories_base": total_calories,
+                "weight_kg_used": weight_kg,
+                "ai_estimated_kcal": ai_estimated_kcal,
+                "routine_kcal": routine_kcal,
+                "extra_kcal": extra_kcal,
                 "skipped_exercise_ids": skipped_exercise_ids,
-                "skipped_calories": skipped_calories,
-                "adjusted_calories": adjusted_calories,
+                "extra_exercises": extra_exercises,
             },
-            total_kcal_min=round(adjusted_calories * 0.85, 2),
-            total_kcal_max=round(adjusted_calories * 1.15, 2),
-            total_kcal_est=round(adjusted_calories, 2),
+            total_kcal_min=round(total_kcal * 0.9, 2),
+            total_kcal_max=round(total_kcal * 1.1, 2),
+            total_kcal_est=total_kcal,
         )
 
         db.add(session)
@@ -534,6 +600,7 @@ class RoutineService:
                 session_id=str(current_session.get("id", "")),
                 session_date=date_type.today(),
                 skipped_exercise_ids=[],
+                extra_exercises=[],
                 weight_kg=weight_kg,
             )
 
@@ -632,11 +699,44 @@ class RoutineService:
         phases: list[dict[str, Any]] = data.get("phases", [])
         schedule: list[dict[str, Any]] = data.get("schedule", [])
         sessions: list[dict[str, Any]] = data.get("sessions", [])
+        month_data: list[dict[str, Any]] = data.get("month_data", [])
         health_analysis: dict[str, Any] = data.get("health_analysis", {})
+
+        # For old routines without month_data, build it from the first session's exercises
+        if not month_data and sessions:
+            first_ex = (sessions[0].get("exercises") or [{}])[0]
+            month_data = [{
+                "month": 1,
+                "sets": first_ex.get("sets", "3 series"),
+                "reps": first_ex.get("reps", "—"),
+                "rest_seconds": first_ex.get("rest_seconds", 60),
+                "note": "",
+            }]
+
+        multi_month = len(month_data) > 1
+
+        # JSON blobs injected into the page script
+        month_data_json = json.dumps(month_data, ensure_ascii=False)
+        routines_json = json.dumps([
+            {
+                "id": s.get("id"),
+                "color": s.get("color", "#c8f55a"),
+                "exercises": [
+                    {
+                        "name": ex.get("name", ""),
+                        "muscle": ex.get("muscle", ""),
+                        "group": ex.get("group", ""),
+                        "notes": ex.get("notes", ""),
+                    }
+                    for ex in s.get("exercises", [])
+                ],
+            }
+            for s in sessions
+        ], ensure_ascii=False)
 
         phases_html = cls._build_phases_html(phases)
         schedule_html = cls._build_schedule_html(schedule, sessions)
-        sessions_html = cls._build_sessions_html(sessions)
+        sessions_html = cls._build_sessions_html(sessions, month_data, multi_month)
         health_html = cls._build_health_analysis_html(health_analysis)
 
         return f"""<!DOCTYPE html>
@@ -731,6 +831,20 @@ class RoutineService:
   .sets-num {{ font-size: 13px; font-weight: 600; }}
   .sets-label {{ font-size: 10px; color: var(--muted); }}
 
+  /* ── Month tabs ── */
+  .month-tabs {{ display: flex; gap: 8px; flex-wrap: wrap; padding: 20px 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }}
+  .month-tab {{ font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }}
+  .month-tab:hover {{ color: var(--text); border-color: var(--text); }}
+  .month-tab.active {{ color: var(--text); border-color: currentColor; }}
+  .month-tab[data-month="1"].active {{ border-color: #c8f55a; color: #c8f55a; }}
+  .month-tab[data-month="2"].active {{ border-color: #f5c85a; color: #f5c85a; }}
+  .month-tab[data-month="3"].active {{ border-color: #f55a8a; color: #f55a8a; }}
+  .month-tab[data-month="4"].active {{ border-color: #5af0f5; color: #5af0f5; }}
+  .exercises-list {{ transition: opacity 0.2s, transform 0.2s; }}
+  .month-note {{ background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 16px; }}
+  [data-theme="light"] .month-note {{ background: rgba(10,26,30,0.03); }}
+  .month-note strong {{ color: var(--text); }}
+
   /* ── Theme switcher ── */
   .theme-switcher {{
     position: fixed; bottom: 24px; right: 24px;
@@ -785,7 +899,7 @@ class RoutineService:
 </div>
 
 <script>
-  function toggle(block) {{ block.classList.toggle('open'); }}
+  // ── Theme switcher ───────────────────────────────────────────────────────────
   function setTheme(t) {{
     document.documentElement.setAttribute('data-theme', t);
     document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
@@ -796,9 +910,67 @@ class RoutineService:
     const saved = localStorage.getItem('nova-routine-theme');
     if (saved) setTheme(saved);
   }})();
+
+  // ── Session toggle ───────────────────────────────────────────────────────────
+  function toggle(block) {{ block.classList.toggle('open'); }}
+
+  // ── Month tabs ───────────────────────────────────────────────────────────────
+  const NOVA_MONTH_DATA = __MONTH_DATA__;
+  const NOVA_ROUTINES   = __ROUTINES__;
+
+  const GROUP_COLORS = {{
+    'Espalda':'#c8f55a','Tríceps':'#a8e040','Cuádricep':'#f5c85a','Cuádriceps':'#f5c85a',
+    'Glúteo':'#f0a030','Pecho':'#f55a8a','Hombro':'#e03070','Bíceps':'#c03060',
+    'Isquio':'#5af0f5','Isquiotibiales':'#5af0f5','Espalda baja':'#40d0d5',
+    'Gemelos':'#8a7af5','Aductores':'#f5a05a','Core':'#fb923c','Cardio':'#a78bfa',
+  }};
+
+  function renderExercises(routineId, month) {{
+    const r = NOVA_ROUTINES.find(x => x.id === routineId);
+    const m = NOVA_MONTH_DATA.find(x => x.month === month) || NOVA_MONTH_DATA[0];
+    if (!r || !m) return '';
+    return r.exercises.map((ex, i) => {{
+      const color = GROUP_COLORS[ex.group] || r.color || '#888';
+      const notesHtml = ex.notes ? `<p class="ex-notes">💡 ${{ex.notes}}</p>` : '';
+      return `
+        <div class="exercise-row">
+          <span class="ex-num">${{i + 1}}</span>
+          <div>
+            <p class="ex-name">${{ex.name}}</p>
+            <p class="ex-muscle">${{ex.muscle}}</p>
+            ${{notesHtml}}
+          </div>
+          <span class="ex-badge" style="background:${{color}}22; color:${{color}}">${{ex.group}}</span>
+          <div class="ex-sets">
+            <p class="sets-num">${{m.sets}}</p>
+            <p class="sets-label">${{m.reps}}</p>
+          </div>
+        </div>`;
+    }}).join('');
+  }}
+
+  function switchMonth(btn, routineId) {{
+    const tabs = btn.closest('.month-tabs').querySelectorAll('.month-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+
+    const month = parseInt(btn.dataset.month);
+    const m = NOVA_MONTH_DATA.find(x => x.month === month) || NOVA_MONTH_DATA[0];
+    const list = document.querySelector(`.exercises-list[data-routine="${{routineId}}"]`);
+    const note = document.querySelector(`.month-note[data-note="${{routineId}}"]`);
+
+    list.style.opacity = '0';
+    list.style.transform = 'translateY(6px)';
+    setTimeout(() => {{
+      list.innerHTML = renderExercises(routineId, month);
+      if (note && m) note.innerHTML = m.note || '';
+      list.style.opacity = '1';
+      list.style.transform = 'translateY(0)';
+    }}, 150);
+  }}
 </script>
 </body>
-</html>"""
+</html>""".replace("__MONTH_DATA__", month_data_json).replace("__ROUTINES__", routines_json)
 
     @classmethod
     def _build_health_analysis_html(cls, analysis: dict[str, Any]) -> str:
@@ -887,12 +1059,46 @@ class RoutineService:
         return f'<div class="week-grid">{items}\n</div>'
 
     @classmethod
-    def _build_sessions_html(cls, sessions: list[dict[str, Any]]) -> str:
+    def _build_sessions_html(
+        cls,
+        sessions: list[dict[str, Any]],
+        month_data: list[dict[str, Any]],
+        multi_month: bool,
+    ) -> str:
+        """Build collapsible session blocks, with month tabs if the routine spans multiple months."""
+        phase_tab_labels = ["Adaptación", "Fuerza", "Negativa", "Pico"]
         blocks = ""
         for i, s in enumerate(sessions):
+            sid = s.get("id", f"session_{i}")
             color = s.get("color", "#c8f55a")
-            exercises_html = cls._build_exercises_html(s.get("exercises", []), color)
             open_class = " open" if i == 0 else ""
+
+            if multi_month:
+                # Build month tabs
+                tabs_html = ""
+                for md in month_data:
+                    m = md.get("month", 1)
+                    phase_label = phase_tab_labels[m - 1] if m <= len(phase_tab_labels) else f"Mes {m}"
+                    active = " active" if m == 1 else ""
+                    tabs_html += f'<button class="month-tab{active}" data-month="{m}" onclick="switchMonth(this, \'{sid}\')">{md.get("number", f"Mes {m}")} · {phase_label}</button>\n'
+
+                first_md = month_data[0]
+                exercises_inner = cls._build_exercises_html(s.get("exercises", []), color, first_md)
+                first_note = first_md.get("note", "")
+                note_html = f'<div class="month-note" data-note="{sid}">{first_note}</div>' if first_note else ""
+
+                inner_html = f"""
+      <div class="month-tabs">
+        {tabs_html}
+      </div>
+      <div class="exercises-list" data-routine="{sid}">
+        {exercises_inner}
+      </div>
+      {note_html}"""
+            else:
+                first_md = month_data[0] if month_data else {}
+                inner_html = cls._build_exercises_html(s.get("exercises", []), color, first_md)
+
             blocks += f"""
   <div class="routine-block{open_class}">
     <div class="routine-header" onclick="toggle(this.closest('.routine-block'))">
@@ -906,20 +1112,26 @@ class RoutineService:
       </svg>
     </div>
     <div class="exercises-table">
-      {exercises_html}
+      {inner_html}
     </div>
   </div>"""
         return blocks
 
     @classmethod
-    def _build_exercises_html(cls, exercises: list[dict[str, Any]], color: str) -> str:
+    def _build_exercises_html(
+        cls,
+        exercises: list[dict[str, Any]],
+        color: str,
+        month_data: dict[str, Any],
+    ) -> str:
+        """Render exercise rows using sets/reps from the given month_data entry."""
+        sets = month_data.get("sets", "—")
+        reps = month_data.get("reps", "—")
         rows = ""
         for i, ex in enumerate(exercises, start=1):
             group = ex.get("group", "")
             notes = ex.get("notes", "")
             notes_html = f'<p class="ex-notes">💡 {notes}</p>' if notes else ""
-            sets = ex.get("sets", "—")
-            reps = ex.get("reps", "—")
             rows += f"""
       <div class="exercise-row">
         <span class="ex-num">{i}</span>
@@ -930,8 +1142,8 @@ class RoutineService:
         </div>
         <span class="ex-badge" style="background:{color}22; color:{color}">{group}</span>
         <div class="ex-sets">
-          <p class="sets-num">{sets}×{reps}</p>
-          <p class="sets-label">series × reps</p>
+          <p class="sets-num">{sets}</p>
+          <p class="sets-label">{reps}</p>
         </div>
       </div>"""
         return rows

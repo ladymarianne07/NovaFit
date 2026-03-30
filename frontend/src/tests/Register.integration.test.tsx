@@ -52,13 +52,13 @@ const completeStep1 = () => {
   fireEvent.change(screen.getByLabelText(/correo electrónico/i), { target: { value: 'john@example.com' } })
   fireEvent.change(screen.getByLabelText(/^contraseña/i), { target: { value: 'password123' } })
   fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'password123' } })
-  fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
+  fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
 }
 
 const completeStep2 = () => {
   fireEvent.change(screen.getByLabelText(/edad/i), { target: { value: '25' } })
 
-  fireEvent.click(screen.getByRole('button', { name: /género/i }))
+  fireEvent.click(screen.getByRole('button', { name: /sexo/i }))
   fireEvent.click(screen.getByRole('option', { name: /masculino/i }))
 
   fireEvent.change(screen.getByLabelText(/peso.*kg/i), { target: { value: '70' } })
@@ -93,7 +93,7 @@ describe('Register Page - Design System Integration', () => {
   test('shows validation when submitting empty step 1', async () => {
     render(<RegisterWrapper />)
 
-    fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/el nombre es obligatorio/i)).toBeInTheDocument()
@@ -110,7 +110,7 @@ describe('Register Page - Design System Integration', () => {
     fireEvent.change(screen.getByLabelText(/^contraseña/i), { target: { value: 'password123' } })
     fireEvent.change(screen.getByLabelText(/confirmar contraseña/i), { target: { value: 'different' } })
 
-    fireEvent.click(screen.getByRole('button', { name: /continuar a configuración de perfil/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/las contraseñas no coinciden/i)).toBeInTheDocument()
@@ -178,6 +178,7 @@ describe('Register Page - Design System Integration', () => {
         password: 'password123',
         first_name: 'John',
         last_name: 'Doe',
+        role: 'student',
         age: 25,
         gender: 'male',
         weight: 70,

@@ -64,6 +64,7 @@ class User(Base):
     workout_correction_factors = relationship("WorkoutCorrectionFactor", back_populates="user", cascade="all, delete-orphan")
     exercise_daily_energy_logs = relationship("ExerciseDailyEnergyLog", back_populates="user", cascade="all, delete-orphan")
     routine = relationship("UserRoutine", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    diet = relationship("UserDiet", back_populates="user", uselist=False, cascade="all, delete-orphan")
     trainer_links = relationship("TrainerStudent", foreign_keys="[TrainerStudent.trainer_id]", back_populates="trainer", cascade="all, delete-orphan")
     student_links = relationship("TrainerStudent", foreign_keys="[TrainerStudent.student_id]", back_populates="student", cascade="all, delete-orphan")
     received_notifications = relationship("Notification", foreign_keys="[Notification.recipient_id]", back_populates="recipient", cascade="all, delete-orphan")
@@ -368,6 +369,37 @@ class UserRoutine(Base):
 
     def __repr__(self):
         return f"<UserRoutine(user_id={self.user_id}, status='{self.status}', source='{self.source_type}')>"
+
+
+class UserDiet(Base):
+    """User's active diet plan — AI generated based on profile macros and routine data."""
+
+    __tablename__ = "user_diets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+
+    source_type = Column(String(20), nullable=True, default="ai_text")
+    status = Column(String(20), nullable=False, default="processing")  # processing | ready | error
+
+    # Gemini-generated HTML (self-contained, inline CSS with 3-theme switcher)
+    html_content = Column(Text, nullable=True)
+
+    # Structured JSON: training_day meals, rest_day meals, macros, water intake
+    diet_data = Column(JSON, nullable=True)
+
+    # Stored intake form data (used for re-edit requests)
+    intake_data = Column(JSON, nullable=True)
+
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="diet")
+
+    def __repr__(self):
+        return f"<UserDiet(user_id={self.user_id}, status='{self.status}')>"
 
 
 class TrainerStudent(Base):

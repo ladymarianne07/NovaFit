@@ -218,6 +218,7 @@ async def log_routine_session(
             session_id=payload.session_id,
             session_date=payload.session_date,
             skipped_exercise_ids=payload.skipped_exercise_ids,
+            extra_exercises=[ex.model_dump() for ex in payload.extra_exercises],
             weight_kg=weight_kg,
         )
         return session

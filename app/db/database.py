@@ -32,6 +32,14 @@ REQUIRED_ROUTINE_COLUMNS: dict[str, str] = {
     "current_session_index": "INTEGER DEFAULT 0",
 }
 
+REQUIRED_DIET_COLUMNS: dict[str, str] = {
+    "source_type": "VARCHAR(20) DEFAULT 'ai_text'",
+    "html_content": "TEXT",
+    "diet_data": "TEXT",
+    "intake_data": "TEXT",
+    "error_message": "TEXT",
+}
+
 
 # Create database engine
 # SQLite for MVP (single file, no setup required)
@@ -77,14 +85,12 @@ def create_tables():
 
 def ensure_schema_compatibility() -> None:
     """
-    Ensure local SQLite schema remains compatible with current models.
+    Ensure schema remains compatible with current models on both SQLite and PostgreSQL.
 
     This avoids runtime failures on existing databases created before
     new columns were introduced (for example, users.objective).
+    Runs automatically on startup via create_tables().
     """
-    if "sqlite" not in settings.DATABASE_URL:
-        return
-
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
     if "food_portion_cache" not in table_names:
@@ -97,7 +103,7 @@ def ensure_schema_compatibility() -> None:
         with engine.begin() as connection:
             for column_name in missing_user_cols:
                 column_type = REQUIRED_USER_COLUMNS[column_name]
-                connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}"))
                 logger.info("Added missing column users.%s", column_name)
 
     missing_routine_cols = get_missing_routine_columns()
@@ -106,15 +112,21 @@ def ensure_schema_compatibility() -> None:
         with engine.begin() as connection:
             for column_name in missing_routine_cols:
                 column_type = REQUIRED_ROUTINE_COLUMNS[column_name]
-                connection.execute(text(f"ALTER TABLE user_routines ADD COLUMN {column_name} {column_type} DEFAULT NULL"))
+                connection.execute(text(f"ALTER TABLE user_routines ADD COLUMN {column_name} {column_type}"))
                 logger.info("Added missing column user_routines.%s", column_name)
+
+    missing_diet_cols = get_missing_diet_columns()
+    if missing_diet_cols:
+        logger.info("Detected missing user_diets columns: %s", ", ".join(missing_diet_cols))
+        with engine.begin() as connection:
+            for column_name in missing_diet_cols:
+                column_type = REQUIRED_DIET_COLUMNS[column_name]
+                connection.execute(text(f"ALTER TABLE user_diets ADD COLUMN {column_name} {column_type}"))
+                logger.info("Added missing column user_diets.%s", column_name)
 
 
 def get_missing_user_columns() -> list[str]:
-    """Return missing required columns in users table for SQLite databases."""
-    if "sqlite" not in settings.DATABASE_URL:
-        return []
-
+    """Return missing required columns in users table."""
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
 
@@ -131,10 +143,7 @@ def get_missing_user_columns() -> list[str]:
 
 
 def get_missing_routine_columns() -> list[str]:
-    """Return missing required columns in user_routines table for SQLite databases."""
-    if "sqlite" not in settings.DATABASE_URL:
-        return []
-
+    """Return missing required columns in user_routines table."""
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
 
@@ -146,6 +155,23 @@ def get_missing_routine_columns() -> list[str]:
     return [
         column_name
         for column_name in REQUIRED_ROUTINE_COLUMNS.keys()
+        if column_name not in existing_columns
+    ]
+
+
+def get_missing_diet_columns() -> list[str]:
+    """Return missing required columns in user_diets table."""
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+
+    if "user_diets" not in table_names:
+        return []  # Table doesn't exist yet; create_all handles it
+
+    existing_columns = {column["name"] for column in inspector.get_columns("user_diets")}
+
+    return [
+        column_name
+        for column_name in REQUIRED_DIET_COLUMNS.keys()
         if column_name not in existing_columns
     ]
 

@@ -32,8 +32,10 @@ import {
   RoutineGenerateRequest,
   RoutineIntakeData,
   UserRoutineResponse,
+  WorkoutSessionResponse,
   routineAPI,
 } from '../services/api'
+import RoutineLogModal from './RoutineLogModal'
 import { useAuth } from '../contexts/AuthContext'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -216,6 +218,15 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
 
   // Viewer modal
   const [showHtmlModal, setShowHtmlModal] = useState(false)
+
+  // Log modal
+  const [showLogModal, setShowLogModal] = useState(false)
+
+  // Month tabs (1-based)
+  const [selectedMonth, setSelectedMonth] = useState(1)
+
+  // Expanded session card (shows exercises)
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null)
 
   // ── Load routine on mount ─────────────────────────────────────────────────
 
@@ -486,26 +497,86 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
 
           {/* Sessions section */}
           <div className="routine-sessions-section">
-            <p className="routine-sessions-section-label">Semana de entrenamiento</p>
+            <div className="routine-sessions-header">
+              <p className="routine-sessions-section-label">Semana de entrenamiento</p>
+              <button
+                type="button"
+                className="routine-log-trigger-btn"
+                onClick={() => setShowLogModal(true)}
+              >
+                Registrar sesión
+              </button>
+            </div>
+
+            {/* Month tabs — only shown when routine has multiple months */}
+            {(routine?.routine_data?.month_data?.length ?? 0) > 1 && (
+              <div className="routine-month-tabs" role="tablist" aria-label="Mes del plan">
+                {routine!.routine_data!.month_data!.map((md) => (
+                  <button
+                    key={md.month}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedMonth === md.month}
+                    className={`routine-month-tab${selectedMonth === md.month ? ' active' : ''}`}
+                    data-month={md.month}
+                    onClick={() => setSelectedMonth(md.month)}
+                  >
+                    {`Mes ${md.month}`}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="routine-sessions-grid">
-              {sessions.map((s) => (
-                <div key={s.id} className="routine-session-card">
-                  <p className="routine-session-label">{s.day_label || s.label}</p>
-                  <div className="routine-session-row">
-                    <div
-                      className="routine-session-dot"
-                      style={{ background: s.color ?? '#c8f55a' }}
-                    />
-                    <p className="routine-session-title">{s.title}</p>
-                    <span className="routine-session-cal">
-                      {Math.round(s.estimated_calories_per_session)} kcal
-                    </span>
+              {sessions.map((s) => {
+                const isExpanded = expandedSessionId === s.id
+                return (
+                  <div key={s.id} className="routine-session-card">
+                    <button
+                      type="button"
+                      className="routine-session-card-trigger"
+                      onClick={() => setExpandedSessionId(isExpanded ? null : s.id)}
+                      aria-expanded={isExpanded}
+                    >
+                      <p className="routine-session-label">{s.day_label || s.label}</p>
+                      <div className="routine-session-row">
+                        <div
+                          className="routine-session-dot"
+                          style={{ background: s.color ?? '#c8f55a' }}
+                        />
+                        <p className="routine-session-title">{s.title}</p>
+                        <span className="routine-session-cal">
+                          {Math.round(s.estimated_calories_per_session)} kcal
+                        </span>
+                      </div>
+                      <p className="routine-session-exercises">
+                        {s.exercises?.length ?? 0} ejercicios
+                      </p>
+                    </button>
+
+                    {/* Expanded exercise list with month-aware sets/reps */}
+                    {isExpanded && s.exercises?.length > 0 && (
+                      <div className="routine-session-exercise-list">
+                        {s.exercises.map((ex) => {
+                          const monthEntry = routine?.routine_data?.month_data?.find((m) => m.month === selectedMonth)
+                          const sets = monthEntry?.sets ?? ex.sets ?? '—'
+                          const reps = monthEntry?.reps ?? ex.reps ?? '—'
+                          const rest = monthEntry?.rest_seconds ?? ex.rest_seconds
+                          return (
+                            <div key={ex.id} className="routine-session-exercise-item">
+                              <span className="routine-session-exercise-name">{ex.name}</span>
+                              <span className="routine-session-exercise-detail">
+                                {sets} × {reps}
+                                {rest != null && ` · ${rest}″`}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <p className="routine-session-exercises">
-                    {s.exercises?.length ?? 0} ejercicios
-                  </p>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </>
@@ -852,6 +923,14 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
         </div>,
         document.body,
       )}
+
+      {/* ══════════ LOG SESSION MODAL ══════════ */}
+      <RoutineLogModal
+        isOpen={showLogModal}
+        sessions={sessions}
+        onClose={() => setShowLogModal(false)}
+        onLogged={(_session: WorkoutSessionResponse) => setShowLogModal(false)}
+      />
 
       {/* ══════════ HTML VIEWER MODAL ══════════ */}
       {showHtmlModal && routine?.html_content && createPortal(

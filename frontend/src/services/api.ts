@@ -533,11 +533,22 @@ export const progressAPI = {
 }
 
 // Routine Types
+
+/** Global per-month training parameters (sets/reps/rest apply to all exercises). */
+export interface MonthData {
+  month: number
+  sets: string
+  reps: string
+  rest_seconds: number
+  note: string
+}
+
 export interface RoutineExercise {
   id: string
   name: string
   muscle?: string
   group?: string
+  /** Legacy flat fields — present in older routines without month_data */
   sets?: string
   reps?: string
   rest_seconds?: number
@@ -551,6 +562,7 @@ export interface RoutineSession {
   title: string
   day_label?: string
   color?: string
+  session_duration_minutes?: number
   estimated_calories_per_session: number
   exercises: RoutineExercise[]
 }
@@ -571,6 +583,8 @@ export interface UserRoutineResponse {
   error_message?: string
   routine_data?: {
     sessions: RoutineSession[]
+    /** Global per-month progression data. Length > 1 means multi-month plan. */
+    month_data?: MonthData[]
     title?: string
     subtitle?: string
   }
@@ -601,10 +615,19 @@ export interface RoutineEditRequest {
   edit_instruction: string
 }
 
+export type ExtraExerciseType = 'resistance' | 'cardio_moderate' | 'cardio_high' | 'hiit' | 'yoga' | 'walking'
+
+export interface ExtraExercise {
+  name: string
+  duration_minutes: number
+  exercise_type: ExtraExerciseType
+}
+
 export interface RoutineLogSessionRequest {
   session_id: string
   session_date: string
   skipped_exercise_ids: string[]
+  extra_exercises: ExtraExercise[]
 }
 
 export interface RoutineAdvanceSessionRequest {
@@ -750,6 +773,108 @@ export const trainerAPI = {
 export const inviteAPI = {
   acceptInvite: async (code: string): Promise<{ status: string }> => {
     const response = await api.post('/invite/accept', { code })
+    return response.data
+  },
+}
+
+// ── Diet Types ────────────────────────────────────────────────────────────────
+
+export interface DietIntakeData {
+  meals_count: number
+  dietary_restrictions: string
+  food_allergies: string
+  health_conditions: string
+  disliked_foods: string
+  budget_level: string
+  cooking_time: string
+  meal_timing_preference: string
+}
+
+export interface DietGenerateRequest {
+  intake: DietIntakeData
+  free_text: string
+}
+
+export interface DietEditRequest {
+  edit_instruction: string
+}
+
+export interface DietFood {
+  name: string
+  portion: string
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  notes: string
+}
+
+export interface DietMeal {
+  id: string
+  name: string
+  time: string
+  foods: DietFood[]
+  total_calories: number
+  total_protein_g: number
+  total_carbs_g: number
+  total_fat_g: number
+  notes: string
+}
+
+export interface DietDay {
+  day_type: string
+  label: string
+  meals: DietMeal[]
+  total_calories: number
+  total_protein_g: number
+  total_carbs_g: number
+  total_fat_g: number
+  water_ml: number
+  notes: string
+}
+
+export interface DietData {
+  title: string
+  description: string
+  objective_label: string
+  target_calories_rest: number
+  target_calories_training: number
+  target_protein_g: number
+  target_carbs_g: number
+  target_fat_g: number
+  water_ml_rest: number
+  water_ml_training: number
+  water_notes: string
+  training_day: DietDay
+  rest_day: DietDay
+  health_notes: string[]
+  supplement_suggestions: string
+  nutritional_summary: string
+}
+
+export interface UserDietResponse {
+  id: number
+  status: 'processing' | 'ready' | 'error'
+  source_type?: string
+  html_content?: string
+  diet_data?: DietData
+  intake_data?: Partial<DietIntakeData>
+  error_message?: string
+}
+
+export const dietAPI = {
+  getActive: async (): Promise<UserDietResponse> => {
+    const response = await api.get('/v1/diet/active')
+    return response.data
+  },
+
+  generate: async (payload: DietGenerateRequest): Promise<UserDietResponse> => {
+    const response = await api.post('/v1/diet/generate', payload)
+    return response.data
+  },
+
+  edit: async (payload: DietEditRequest): Promise<UserDietResponse> => {
+    const response = await api.post('/v1/diet/edit', payload)
     return response.data
   },
 }

@@ -146,6 +146,31 @@ class RoutineAdvanceSessionRequest(BaseModel):
 
 # ── Session log ───────────────────────────────────────────────────────────────
 
+EXTRA_EXERCISE_MET: dict[str, float] = {
+    "resistance": 4.5,
+    "cardio_moderate": 7.0,
+    "cardio_high": 9.5,
+    "hiit": 8.5,
+    "yoga": 2.5,
+    "walking": 3.5,
+}
+
+
+class ExtraExercise(BaseModel):
+    """An exercise added on top of the routine session."""
+
+    name: str = Field(..., min_length=1)
+    duration_minutes: int = Field(..., ge=1, le=180)
+    exercise_type: str = Field(
+        default="resistance",
+        description="'resistance' | 'cardio_moderate' | 'cardio_high' | 'hiit' | 'yoga' | 'walking'",
+    )
+
+    def kcal(self, weight_kg: float) -> float:
+        met = EXTRA_EXERCISE_MET.get(self.exercise_type, 4.5)
+        return round(met * weight_kg * (self.duration_minutes / 60.0), 2)
+
+
 class RoutineLogSessionRequest(BaseModel):
     """Request to log a completed routine session."""
 
@@ -154,4 +179,8 @@ class RoutineLogSessionRequest(BaseModel):
     skipped_exercise_ids: list[str] = Field(
         default_factory=list,
         description="Exercise ids the user did NOT complete",
+    )
+    extra_exercises: list[ExtraExercise] = Field(
+        default_factory=list,
+        description="Additional exercises done on top of the routine session",
     )

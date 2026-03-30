@@ -121,7 +121,7 @@ describe('Login Page - Regression Tests', () => {
     expect(submitButton).toBeDisabled()
     expect(emailInput).toBeDisabled()
     expect(passwordInput).toBeDisabled()
-    expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+    expect(document.querySelector('.neon-loader')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalled()

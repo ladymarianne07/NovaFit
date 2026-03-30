@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Brain, ChevronLeft, ChevronRight, Clock3, Mic, MicOff, Salad, Sparkles, Trash2 } from 'lucide-react'
 import { foodAPI, nutritionAPI, MealGroupResponse, FoodParseLogResponse, ConfirmMealsRequest } from '../services/api'
 import AiMealConfirmModal from './AiMealConfirmModal'
+import DietModule from './DietModule'
 
 interface NutritionModuleProps {
   className?: string
@@ -522,9 +523,7 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       </div>
 
       {moduleTab === 'diet' ? (
-        <article className="nutrition-card nutrition-main-panel module-placeholder-card">
-          <p className="module-placeholder-text">Mi Dieta — próximamente.</p>
-        </article>
+        <DietModule />
       ) : (
         <>
       <div className="nutrition-top-action">

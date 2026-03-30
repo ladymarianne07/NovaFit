@@ -108,7 +108,7 @@ describe('Register Page - Glassmorphism Design System Verification', () => {
     expect(screen.getAllByText(/contraseña/i).length).toBeGreaterThan(0)
 
     // ✅ Verify continue button is present
-    expect(screen.getByRole('button', { name: /continuar a configuración de perfil/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^continuar$/i })).toBeInTheDocument()
 
     // ✅ Verify login link is present
     expect(screen.getByRole('link', { name: /inicia sesión aquí/i })).toBeInTheDocument()

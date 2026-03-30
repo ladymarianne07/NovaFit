@@ -8684,3 +8684,732 @@
 [data-theme="light"] .routine-log-summary-label {
   color: rgba(10, 26, 30, 0.55);
 }
+
+/* ── Routine sessions header row (label + Registrar btn) ── */
+.routine-sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.routine-log-trigger-btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--theme-accent);
+  background: rgba(200, 245, 90, 0.08);
+  border: 1px solid rgba(200, 245, 90, 0.25);
+  border-radius: 2rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.routine-log-trigger-btn:hover {
+  background: rgba(200, 245, 90, 0.14);
+  border-color: rgba(200, 245, 90, 0.4);
+}
+
+/* ── Month tabs ──────────────────────────────────────────── */
+.routine-month-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.25rem 0;
+}
+
+.routine-month-tab {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.85rem;
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.routine-month-tab.active {
+  color: var(--theme-accent);
+  border-color: var(--theme-accent);
+  background: rgba(200, 245, 90, 0.08);
+}
+.routine-month-tab:hover:not(.active) {
+  color: rgba(255, 255, 255, 0.65);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ── Session card as button (for expand/collapse) ────────── */
+.routine-session-card-trigger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* ── Exercise list inside expanded session card ──────────── */
+.routine-session-exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.routine-session-exercise-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.routine-session-exercise-name {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.75);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routine-session-exercise-detail {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Log modal — step 1 confirm buttons ──────────────────── */
+.routine-log-question {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+}
+
+.routine-log-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.routine-log-confirm-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+.routine-log-confirm-btn.yes {
+  background: var(--theme-accent);
+  color: #0a1a1e;
+}
+.routine-log-confirm-btn.yes:hover {
+  opacity: 0.9;
+}
+.routine-log-confirm-btn.adjust {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+.routine-log-confirm-btn.adjust:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Log modal — extras section ──────────────────────────── */
+.routine-log-extras {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.routine-log-extra-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.6rem;
+}
+
+.routine-log-extra-name {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.88);
+  outline: none;
+  box-sizing: border-box;
+}
+.routine-log-extra-name::placeholder { color: rgba(255, 255, 255, 0.28); }
+.routine-log-extra-name:focus { border-color: var(--theme-accent); }
+
+.routine-log-extra-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.routine-log-extra-type {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.8);
+  outline: none;
+}
+
+.routine-log-extra-duration {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.routine-log-extra-duration-input {
+  width: 3.5rem;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.82rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.88);
+  outline: none;
+}
+.routine-log-extra-duration-input:focus { border-color: var(--theme-accent); }
+
+.routine-log-extra-unit {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.routine-log-extra-remove {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.4rem;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+.routine-log-extra-remove:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.routine-log-add-extra-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--theme-accent);
+  background: rgba(200, 245, 90, 0.06);
+  border: 1px dashed rgba(200, 245, 90, 0.3);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+.routine-log-add-extra-btn:hover {
+  background: rgba(200, 245, 90, 0.1);
+}
+
+/* ── Log modal — calorie hint text ───────────────────────── */
+.routine-log-summary-hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: right;
+}
+
+/* ── Light mode overrides for new classes ────────────────── */
+[data-theme="light"] .routine-month-tab {
+  color: rgba(10, 26, 30, 0.4);
+  border-color: rgba(10, 26, 30, 0.15);
+}
+[data-theme="light"] .routine-month-tab:hover:not(.active) {
+  color: rgba(10, 26, 30, 0.65);
+  border-color: rgba(10, 26, 30, 0.28);
+}
+[data-theme="light"] .routine-session-exercise-name {
+  color: rgba(10, 26, 30, 0.78);
+}
+[data-theme="light"] .routine-session-exercise-detail {
+  color: rgba(10, 26, 30, 0.4);
+}
+[data-theme="light"] .routine-log-question {
+  color: rgba(10, 26, 30, 0.85);
+}
+[data-theme="light"] .routine-log-confirm-btn.adjust {
+  background: rgba(10, 26, 30, 0.05);
+  border-color: rgba(10, 26, 30, 0.12);
+  color: rgba(10, 26, 30, 0.7);
+}
+[data-theme="light"] .routine-log-extra-name,
+[data-theme="light"] .routine-log-extra-duration-input,
+[data-theme="light"] .routine-log-extra-type {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(10, 26, 30, 0.15);
+  color: #0a1a1e;
+}
+[data-theme="light"] .routine-log-summary-hint {
+  color: rgba(10, 26, 30, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DIET MODULE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.diet-module {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+/* ── Description under header card ──────────────────────────────── */
+.diet-description {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.83rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.55;
+}
+
+/* ── Calorie summary pills ───────────────────────────────────────── */
+.diet-calorie-summary {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.diet-cal-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.diet-cal-pill strong {
+  color: var(--theme-accent);
+}
+
+.diet-cal-pill.training {
+  border-color: rgba(0, 242, 195, 0.25);
+  background: rgba(0, 242, 195, 0.06);
+}
+
+/* ── Day tabs ────────────────────────────────────────────────────── */
+.diet-day-tabs {
+  display: flex;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.diet-day-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.diet-day-tab.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--theme-accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Day section ─────────────────────────────────────────────────── */
+.diet-day-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Macros row ──────────────────────────────────────────────────── */
+.diet-macros-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.diet-macro-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  min-width: 60px;
+  flex: 1;
+}
+
+.diet-macro-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.2;
+}
+
+.diet-macro-label {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 0.1rem;
+}
+
+.diet-macro-chip.kcal .diet-macro-value  { color: rgba(236, 72, 153, 0.9); }
+.diet-macro-chip.protein .diet-macro-value { color: rgba(139, 92, 246, 0.9); }
+.diet-macro-chip.carbs .diet-macro-value  { color: var(--theme-accent); }
+.diet-macro-chip.fat .diet-macro-value    { color: rgba(6, 182, 212, 0.9); }
+.diet-macro-chip.water .diet-macro-value  { color: rgba(96, 165, 250, 0.9); }
+
+/* ── Day notes ───────────────────────────────────────────────────── */
+.diet-day-notes {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ── Meals list ──────────────────────────────────────────────────── */
+.diet-meals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.diet-meal-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+
+.diet-meal-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.diet-meal-trigger {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.diet-meal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.diet-meal-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+}
+
+.diet-meal-time {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.diet-meal-kcal {
+  font-size: 0.85rem;
+  color: var(--theme-accent);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.diet-meal-macros {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.diet-meal-foods-count {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Expanded foods ──────────────────────────────────────────────── */
+.diet-meal-foods {
+  padding: 0 0.9rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.6rem;
+}
+
+.diet-food-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.diet-food-item:last-of-type {
+  border-bottom: none;
+}
+
+.diet-food-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.diet-food-name {
+  font-size: 0.84rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.diet-food-kcal {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  flex-shrink: 0;
+}
+
+.diet-food-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  gap: 0.5rem;
+}
+
+.diet-food-notes {
+  margin: 0.1rem 0 0 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+}
+
+.diet-meal-note {
+  margin: 0.4rem 0 0 0;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border-left: 2px solid var(--theme-accent-border);
+}
+
+/* ── Health notes ────────────────────────────────────────────────── */
+.diet-health-notes {
+  background: rgba(0, 242, 195, 0.04);
+  border: 1px solid rgba(0, 242, 195, 0.15);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-top: 0.25rem;
+}
+
+.diet-health-notes-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--theme-accent);
+}
+
+.diet-health-notes ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.diet-health-notes li {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+}
+
+.diet-supplement {
+  margin: 0.6rem 0 0 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}
+
+/* ── Profile summary in modal ────────────────────────────────────── */
+.diet-profile-summary {
+  background: rgba(0, 242, 195, 0.05);
+  border: 1px solid rgba(0, 242, 195, 0.15);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.diet-profile-summary-title {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--theme-accent);
+}
+
+.diet-profile-pills {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.diet-profile-pills span {
+  background: rgba(0, 242, 195, 0.1);
+  border: 1px solid rgba(0, 242, 195, 0.2);
+  border-radius: 12px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.diet-profile-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.5;
+}
+
+.diet-ai-creator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 160px);
+  padding-bottom: 0.5rem;
+}
+
+/* ── Light mode overrides ────────────────────────────────────────── */
+[data-theme="light"] .diet-description {
+  color: rgba(10, 26, 30, 0.6);
+}
+[data-theme="light"] .diet-cal-pill {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(10, 26, 30, 0.12);
+  color: rgba(10, 26, 30, 0.7);
+}
+[data-theme="light"] .diet-day-tabs {
+  background: rgba(10, 26, 30, 0.04);
+  border-color: rgba(10, 26, 30, 0.1);
+}
+[data-theme="light"] .diet-day-tab {
+  color: rgba(10, 26, 30, 0.45);
+}
+[data-theme="light"] .diet-day-tab.active {
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--theme-accent);
+}
+[data-theme="light"] .diet-macro-chip {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(10, 26, 30, 0.1);
+}
+[data-theme="light"] .diet-macro-label {
+  color: rgba(10, 26, 30, 0.45);
+}
+[data-theme="light"] .diet-meal-card {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(10, 26, 30, 0.1);
+}
+[data-theme="light"] .diet-meal-name {
+  color: rgba(10, 26, 30, 0.85);
+}
+[data-theme="light"] .diet-meal-time {
+  color: rgba(10, 26, 30, 0.4);
+}
+[data-theme="light"] .diet-meal-macros {
+  color: rgba(10, 26, 30, 0.4);
+}
+[data-theme="light"] .diet-food-name {
+  color: rgba(10, 26, 30, 0.8);
+}
+[data-theme="light"] .diet-food-kcal,
+[data-theme="light"] .diet-food-detail {
+  color: rgba(10, 26, 30, 0.45);
+}
+[data-theme="light"] .diet-health-notes {
+  background: rgba(0, 200, 216, 0.05);
+  border-color: rgba(0, 200, 216, 0.2);
+}
+[data-theme="light"] .diet-health-notes li {
+  color: rgba(10, 26, 30, 0.65);
+}
+[data-theme="light"] .diet-profile-summary {
+  background: rgba(0, 200, 216, 0.06);
+  border-color: rgba(0, 200, 216, 0.2);
+}
+[data-theme="light"] .diet-profile-pills span {
+  background: rgba(0, 200, 216, 0.1);
+  border-color: rgba(0, 200, 216, 0.25);
+  color: rgba(10, 26, 30, 0.75);
+}
+[data-theme="light"] .diet-day-notes,
+[data-theme="light"] .diet-supplement,
+[data-theme="light"] .diet-meal-note,
+[data-theme="light"] .diet-food-notes,
+[data-theme="light"] .diet-profile-note {
+  color: rgba(10, 26, 30, 0.5);
+}
