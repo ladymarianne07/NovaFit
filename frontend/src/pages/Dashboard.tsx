@@ -39,7 +39,6 @@ const Dashboard: React.FC = () => {
   const [latestSkinfold, setLatestSkinfold] = useState<SkinfoldCalculationResult | null>(null)
   const [dailyWorkoutEnergy, setDailyWorkoutEnergy] = useState<WorkoutDailyEnergyResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [trainerStudents, setTrainerStudents] = useState<StudentSummary[]>([])
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
@@ -255,31 +254,6 @@ const Dashboard: React.FC = () => {
   const activeMainTab = activeTab === 'profile' ? 'dashboard' : activeTab
   const activeIndex = MAIN_TAB_ORDER.indexOf(activeMainTab)
 
-  const handleTouchStart = (event: React.TouchEvent<HTMLElement>) => {
-    setTouchStartX(event.touches[0]?.clientX ?? null)
-  }
-
-  const handleTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
-    if (touchStartX === null) return
-
-    const endX = event.changedTouches[0]?.clientX ?? touchStartX
-    const deltaX = endX - touchStartX
-    const swipeThreshold = 45
-
-    if (Math.abs(deltaX) < swipeThreshold) {
-      setTouchStartX(null)
-      return
-    }
-
-    if (deltaX < 0 && activeIndex < MAIN_TAB_ORDER.length - 1) {
-      setActiveTab(MAIN_TAB_ORDER[activeIndex + 1])
-    } else if (deltaX > 0 && activeIndex > 0) {
-      setActiveTab(MAIN_TAB_ORDER[activeIndex - 1])
-    }
-
-    setTouchStartX(null)
-  }
-
   return (
     <div className="login-container dashboard-with-navigation">
       <DashboardHeader
@@ -305,8 +279,6 @@ const Dashboard: React.FC = () => {
         ) : (
           <section
             className="dashboard-slide-shell"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
             aria-label="Navegación principal por secciones"
           >
             <div

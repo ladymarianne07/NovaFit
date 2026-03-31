@@ -745,8 +745,17 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                           className="routine-intake-select"
                           min={1}
                           max={12}
-                          value={intake.duration_months}
-                          onChange={(e) => updateIntake('duration_months', Number(e.target.value))}
+                          value={intake.duration_months === 0 ? '' : intake.duration_months}
+                          onChange={(e) => {
+                            const raw = e.target.value
+                            if (raw === '') {
+                              updateIntake('duration_months', 0)
+                            } else {
+                              const n = parseInt(raw, 10)
+                              if (!isNaN(n) && n >= 1 && n <= 12) updateIntake('duration_months', n)
+                            }
+                          }}
+                          placeholder="1"
                           disabled={isGenerating}
                         />
                         <span className="routine-intake-unit">meses</span>
