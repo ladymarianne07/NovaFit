@@ -635,7 +635,6 @@ class RoutineService:
         payload = {
             "contents": [{"parts": parts}],
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 65536},
-            "thinkingConfig": {"thinkingBudget": 0},
         }
 
         return cls._execute_gemini_request(url, payload)
@@ -653,7 +652,6 @@ class RoutineService:
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.3, "maxOutputTokens": 65536},
-            "thinkingConfig": {"thinkingBudget": 0},
         }
 
         return cls._execute_gemini_request(url, payload)
