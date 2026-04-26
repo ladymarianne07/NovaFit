@@ -11,7 +11,7 @@
 
 ```powershell
 # Navigate to project directory
-cd C:\Users\Maru\OneDrive\Escritorio\NovaFitness
+cd D:\NovaFitness
 
 # Create virtual environment
 python -m venv venv
@@ -252,8 +252,8 @@ fetch(`${API_BASE}/events/`, {
    - Consider PostgreSQL for multiple users
 
 3. **Token expiration:**
-   - Default: 24 hours (for PWA convenience)
-   - Implement refresh logic in frontend
+   - Default: **1 año** (`ACCESS_TOKEN_EXPIRE_MINUTES=525600` en `.env` y `config.py`)
+   - Decisión: PWA-first, mejor UX que rotación frecuente. Ver `docs/DECISIONS.md` → "JWT 1 año"
 
 4. **Import errors:**
    - Ensure virtual environment is activated

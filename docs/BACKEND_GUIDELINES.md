@@ -12,13 +12,6 @@ This document establishes the architectural patterns, coding standards, and best
 - **Small Functions**: Keep functions focused and concise
 - **No Magic Numbers**: Use constants for all hardcoded values
 
-### 2. SOLID Principles
-- **S**ingle Responsibility Principle
-- **O**pen/Closed Principle  
-- **L**iskov Substitution Principle
-- **I**nterface Segregation Principle
-- **D**ependency Inversion Principle
-
 ## 🏛️ Architecture Pattern
 
 ### Service Layer Architecture
@@ -407,7 +400,7 @@ app.include_router(new_feature.router)              # dev (Vite proxy strips /ap
 app.include_router(new_feature.router, prefix="/api")  # production (no proxy)
 ```
 
-Current routers that require dual registration: `routine.router`, `workout.router`.
+Current routers that require dual registration: `routine.router`, `workout.router`, `diet.router`. (Add `food.router` and any future `/v1/` router to this list.)
 
 If you add a new router with a `/v1/` prefix (e.g. `APIRouter(prefix="/v1/my-feature")`), add both `include_router` calls or the feature will 404 in production.
 
@@ -582,12 +575,12 @@ Use the dict that corresponds to the table:
 
 ---
 
-### 2. Service Layer
+### 4. Service Layer
 - Keep services stateless when possible
 - Use dependency injection for better testability
 - Cache expensive calculations when appropriate
 
-### 3. API Layer
+### 5. API Layer
 - Use appropriate HTTP status codes
 - Implement request/response validation
 - Add rate limiting for public endpoints
@@ -651,13 +644,3 @@ Before submitting code, ensure:
 - **Code Duplication**: Less than 3%
 - **Documentation Coverage**: 100% for public APIs
 
-## 🚀 Conclusion
-
-Following these guidelines ensures that the NovaFitness application remains:
-- **Maintainable**: Easy to modify and extend
-- **Testable**: Comprehensive test coverage
-- **Scalable**: Architecture supports growth
-- **Reliable**: Consistent error handling and validation
-- **Secure**: Proper authentication and input validation
-
-Remember: **Clean code is not written by following a set of rules. Clean code is written by programmers who care about their craft.**
