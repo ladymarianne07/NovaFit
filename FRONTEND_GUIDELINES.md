@@ -200,6 +200,15 @@ useEffect(() => {
 ## 🌐 **API Integration**
 
 ### 1. Axios Configuration
+
+> **`/api` baseURL and production routing**
+>
+> The axios instance uses `baseURL: '/api'`, so every request goes to `/api/v1/...`.
+> In **development**, Vite's dev proxy (`vite.config.ts`) intercepts `/api/*` and forwards to `http://localhost:8000/*`, stripping the prefix — the backend sees `/v1/...`.
+> In **production** (built PWA), there is no proxy. The request reaches the backend as `/api/v1/...`.
+>
+> **Consequence for backend developers:** Any FastAPI router whose `APIRouter` uses a `/v1/` prefix must be mounted twice in `main.py` — once without prefix and once with `prefix="/api"`. See `BACKEND_GUIDELINES.md → Register Router` for details.
+
 ```typescript
 // ✅ Create configured axios instance
 const api = axios.create({

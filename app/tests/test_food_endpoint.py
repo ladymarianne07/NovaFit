@@ -30,7 +30,7 @@ def test_parse_and_calculate_prefers_fatsecret_before_usda(client: TestClient, m
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "100 gramos de banana"},
     )
 
@@ -72,7 +72,7 @@ def test_parse_and_calculate_falls_back_to_usda_when_fatsecret_fails(
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "100 gramos de banana"},
     )
 
@@ -105,7 +105,7 @@ def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(client: 
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "me comi una banana mediana"},
     )
 
@@ -138,7 +138,7 @@ def test_parse_and_calculate_returns_calories_and_macros(client: TestClient, mon
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "200 gramos de pechuga de pollo a la plancha"},
     )
 
@@ -181,7 +181,7 @@ def test_parse_and_calculate_serving_uses_serving_size_for_macro_totals(client: 
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "2 porciones de arroz cocido"},
     )
 
@@ -231,7 +231,7 @@ def test_parse_and_calculate_aggregates_multiple_foods(client: TestClient, monke
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "pollo 100 gramos y arroz 200 gramos"},
     )
 
@@ -270,7 +270,7 @@ def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monke
     long_text = " ".join(["avena con fruta y yogurt"] * 35)  # >500 chars
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": long_text},
     )
 
@@ -315,7 +315,7 @@ def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(clie
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "cafe con leche"},
     )
 
@@ -425,7 +425,7 @@ def test_parse_and_calculate_applies_conservative_defaults_for_ambiguous_breakfa
     monkeypatch.setattr("app.services.food_service.PortionResolverService.resolve_portion_grams", fake_resolve_portion_grams)
 
     response = client.post(
-        "/api/food/parse-and-calculate",
+        "/food/parse-and-calculate",
         json={"text": "sweetener, lactose-free milk, café, manteca, scrambled eggs, whole wheat toast"},
     )
 

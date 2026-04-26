@@ -38,6 +38,10 @@ REQUIRED_DIET_COLUMNS: dict[str, str] = {
     "diet_data": "TEXT",
     "intake_data": "TEXT",
     "error_message": "TEXT",
+    "current_meal_index": "INTEGER DEFAULT 0",
+    "current_meal_date": "DATE",
+    "daily_consumed": "TEXT",
+    "daily_overrides": "TEXT",
 }
 
 
@@ -174,8 +178,3 @@ def get_missing_diet_columns() -> list[str]:
         for column_name in REQUIRED_DIET_COLUMNS.keys()
         if column_name not in existing_columns
     ]
-
-
-def drop_tables():
-    """Drop all database tables (use with caution!)"""
-    Base.metadata.drop_all(bind=engine)

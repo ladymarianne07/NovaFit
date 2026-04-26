@@ -445,7 +445,7 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
   // ── Derived values ───────────────────────────────────────────────────────
   const hasActiveRoutine = routine?.status === 'ready'
   const currentSession = useMemo(() => getCurrentSession(routine), [routine])
-  const routineKcal = Math.round(currentSession?.estimated_calories_per_session ?? 0)
+  const routineKcal = Math.round(5.0 * 70 * ((currentSession?.session_duration_minutes ?? 60) / 60))
   const sessionDuration = (routine?.intake_data as Record<string, unknown>)?.session_duration_minutes as number ?? 60
 
   const exerciseKcal = dailyEnergy?.exercise_kcal_est ?? 0
@@ -553,7 +553,7 @@ const WorkoutModule: React.FC<WorkoutModuleProps> = ({ className = '' }) => {
       setAiInput('')
       setShowAiForm(false)
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      const err = error as { response?: { data?: { detail?: string; error_code?: string } }; message?: string }
       const detail = err?.response?.data?.detail
       if (typeof detail === 'string' && detail.trim()) setSubmitError(detail)
       else if (err instanceof Error) setSubmitError(err.message)

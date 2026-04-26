@@ -1,0 +1,496 @@
+{
+  "info": {
+    "name": "NovaFitness — E2E Flow",
+    "_postman_id": "novafitness-e2e-v1",
+    "description": "End-to-end flow: Register → Login → Routine (AI) → Diet (AI) → Log meal → Food IA → Alternativa → Workout → Routine session → Macros/Energía",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "BASE_URL", "value": "http://localhost:8000" },
+    { "key": "TOKEN",    "value": "" },
+    { "key": "SESSION_ID_WORKOUT", "value": "" },
+    { "key": "ROUTINE_SESSION_ID", "value": "full_body_a" }
+  ],
+  "item": [
+    {
+      "name": "1 — Auth",
+      "item": [
+        {
+          "name": "1.1 Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{BASE_URL}}/auth/register", "host": ["{{BASE_URL}}"], "path": ["auth","register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2e@novafitness.app\",\n  \"first_name\": \"Ana\",\n  \"last_name\": \"Test\",\n  \"password\": \"TestPass123!\",\n  \"role\": \"student\",\n  \"age\": 28,\n  \"gender\": \"female\",\n  \"weight\": 65.0,\n  \"height\": 165.0,\n  \"activity_level\": 1.35,\n  \"objective\": \"fat_loss\",\n  \"aggressiveness_level\": 2\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 201', () => pm.response.to.have.status(201));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "1.2 Login → guarda TOKEN",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{BASE_URL}}/auth/login", "host": ["{{BASE_URL}}"], "path": ["auth","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"e2e@novafitness.app\",\n  \"password\": \"TestPass123!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "pm.collectionVariables.set('TOKEN', json.access_token);",
+                "pm.test('Token guardado', () => pm.expect(json.access_token).to.be.a('string'));"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2 — Rutina",
+      "item": [
+        {
+          "name": "2.1 Generar rutina (IA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/routines/generate", "host": ["{{BASE_URL}}"], "path": ["v1","routines","generate"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intake\": {\n    \"objective\": \"fat_loss\",\n    \"duration_months\": 1,\n    \"health_conditions\": \"ninguna\",\n    \"medications\": \"\",\n    \"injuries\": \"\",\n    \"preferred_exercises\": \"cardio y fuerza\",\n    \"frequency_days\": \"3-4\",\n    \"experience_level\": \"intermedio\",\n    \"equipment\": \"gimnasio completo\",\n    \"session_duration_minutes\": 60\n  },\n  \"free_text\": \"Quiero perder grasa y mejorar mi resistencia\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "pm.test('Rutina ready', () => pm.expect(json.status).to.eql('ready'));",
+                "const sessions = json.routine_data?.sessions ?? [];",
+                "if (sessions.length > 0) pm.collectionVariables.set('ROUTINE_SESSION_ID', sessions[0].id);"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "2.2 Editar rutina (IA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/routines/edit", "host": ["{{BASE_URL}}"], "path": ["v1","routines","edit"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edit_instruction\": \"Reemplaza los ejercicios de pierna por ejercicios de core y espalda baja\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2.3 Get rutina activa",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/routines/active", "host": ["{{BASE_URL}}"], "path": ["v1","routines","active"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2.4 Log sesión de rutina",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/routines/log-session", "host": ["{{BASE_URL}}"], "path": ["v1","routines","log-session"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"{{ROUTINE_SESSION_ID}}\",\n  \"session_date\": \"2026-04-03\",\n  \"skipped_exercise_ids\": [],\n  \"extra_exercises\": [\n    {\n      \"name\": \"Plancha abdominal\",\n      \"duration_minutes\": 10,\n      \"exercise_type\": \"resistance\"\n    }\n  ]\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 201', () => pm.response.to.have.status(201));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "2.5 Avanzar sesión de rutina",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/routines/advance-session", "host": ["{{BASE_URL}}"], "path": ["v1","routines","advance-session"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"complete\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "3 — Dieta",
+      "item": [
+        {
+          "name": "3.1 Generar dieta (IA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/generate", "host": ["{{BASE_URL}}"], "path": ["v1","diet","generate"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intake\": {\n    \"meals_count\": 4,\n    \"dietary_restrictions\": \"ninguna\",\n    \"food_allergies\": \"ninguna\",\n    \"health_conditions\": \"ninguna\",\n    \"disliked_foods\": \"higado\",\n    \"budget_level\": \"moderado\",\n    \"cooking_time\": \"moderado\",\n    \"training_days\": [\"lunes\", \"miercoles\", \"viernes\"]\n  },\n  \"free_text\": \"Prefiero comidas simples y variadas, con proteína en cada comida\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Dieta ready', () => pm.expect(pm.response.json().status).to.eql('ready'));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.2 Editar dieta (IA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/edit", "host": ["{{BASE_URL}}"], "path": ["v1","diet","edit"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"edit_instruction\": \"Reemplaza el desayuno por una opción sin lácteos y aumenta la proteína del almuerzo\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.3 Get dieta activa",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/active", "host": ["{{BASE_URL}}"], "path": ["v1","diet","active"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.4 Get comida actual",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/current-meal", "host": ["{{BASE_URL}}"], "path": ["v1","diet","current-meal"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.5 Log comida (complete)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/log-meal", "host": ["{{BASE_URL}}"], "path": ["v1","diet","log-meal"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"complete\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Advanced', () => pm.expect(pm.response.json().advanced).to.be.true);"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.6 Log comida (skip)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/log-meal", "host": ["{{BASE_URL}}"], "path": ["v1","diet","log-meal"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"skip\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.7 Modificar comida (add food)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/modify-meal", "host": ["{{BASE_URL}}"], "path": ["v1","diet","modify-meal"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"day_type\": \"rest_day\",\n  \"meal_id\": \"desayuno\",\n  \"action\": \"add_food\",\n  \"food\": {\n    \"name\": \"Nueces\",\n    \"portion\": \"30g\",\n    \"calories\": 196.0,\n    \"protein_g\": 4.6,\n    \"carbs_g\": 4.1,\n    \"fat_g\": 19.6,\n    \"notes\": \"\"\n  }\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "3.8 Generar alternativa de comida (IA)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/meals/alternative", "host": ["{{BASE_URL}}"], "path": ["v1","diet","meals","alternative"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "pm.collectionVariables.set('ALT_MEAL_INDEX', json.meal_index);",
+                "pm.collectionVariables.set('ALT_DAY_TYPE', json.day_type);",
+                "pm.collectionVariables.set('ALT_MEAL_JSON', JSON.stringify(json.meal));"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "3.9 Aplicar alternativa (scope: today)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/diet/meals/apply-alternative", "host": ["{{BASE_URL}}"], "path": ["v1","diet","meals","apply-alternative"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"meal_index\": 2,\n  \"day_type\": \"rest_day\",\n  \"scope\": \"today\",\n  \"meal\": {\n    \"id\": \"meal_alt\",\n    \"name\": \"Salmon con Quinoa\",\n    \"time\": \"Almuerzo\",\n    \"foods\": [\n      {\n        \"name\": \"Salmon\",\n        \"portion\": \"150g\",\n        \"calories\": 312.0,\n        \"protein_g\": 37.5,\n        \"carbs_g\": 0.0,\n        \"fat_g\": 18.0,\n        \"notes\": \"A la plancha\"\n      },\n      {\n        \"name\": \"Quinoa cocida\",\n        \"portion\": \"100g\",\n        \"calories\": 120.0,\n        \"protein_g\": 4.1,\n        \"carbs_g\": 21.3,\n        \"fat_g\": 1.9,\n        \"notes\": \"\"\n      }\n    ],\n    \"total_calories\": 432.0,\n    \"total_protein_g\": 41.6,\n    \"total_carbs_g\": 21.3,\n    \"total_fat_g\": 19.9,\n    \"notes\": \"\"\n  }\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 204 (sin body)', () => pm.response.to.have.status(204));"], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "4 — Food IA",
+      "item": [
+        {
+          "name": "4.1 Parse preview (sin loguear)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/food/parse-preview", "host": ["{{BASE_URL}}"], "path": ["food","parse-preview"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"100 gramos de pechuga de pollo a la plancha, arroz integral 80 gramos y una manzana mediana\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "4.2 Parse and log (directo a nutrición)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/food/parse-and-log", "host": ["{{BASE_URL}}"], "path": ["food","parse-and-log"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"desayuno: avena con leche y frutas. almuerzo: ensalada de atun con tomate y pepino\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "4.3 Parse and calculate (sin autenticación)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{BASE_URL}}/food/parse-and-calculate", "host": ["{{BASE_URL}}"], "path": ["food","parse-and-calculate"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"200 gramos de pechuga de pollo a la plancha\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "4.4 Search multi-source",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/food/search-multi?query=banana",
+              "host": ["{{BASE_URL}}"],
+              "path": ["food","search-multi"],
+              "query": [{ "key": "query", "value": "banana" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "5 — Workout manual",
+      "item": [
+        {
+          "name": "5.1 Crear sesión de entrenamiento",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+            ],
+            "url": { "raw": "{{BASE_URL}}/v1/sessions", "host": ["{{BASE_URL}}"], "path": ["v1","sessions"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_date\": \"2026-04-03\",\n  \"source\": \"manual\",\n  \"status\": \"final\",\n  \"weight_kg\": 65.0,\n  \"blocks\": [\n    {\n      \"activity\": \"correr\",\n      \"duration_minutes\": 30,\n      \"intensity\": \"moderate\"\n    },\n    {\n      \"activity\": \"fuerza_general\",\n      \"duration_minutes\": 45,\n      \"intensity\": \"high\"\n    }\n  ]\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.collectionVariables.set('SESSION_ID_WORKOUT', pm.response.json().id);"
+              ],
+              "type": "text/javascript"
+            }
+          }]
+        },
+        {
+          "name": "5.2 Listar sesiones del día",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": {
+              "raw": "{{BASE_URL}}/v1/sessions?session_date=2026-04-03",
+              "host": ["{{BASE_URL}}"],
+              "path": ["v1","sessions"],
+              "query": [{ "key": "session_date", "value": "2026-04-03" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "5.3 Eliminar sesión",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/sessions/{{SESSION_ID_WORKOUT}}", "host": ["{{BASE_URL}}"], "path": ["v1","sessions","{{SESSION_ID_WORKOUT}}"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));"], "type": "text/javascript" }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "6 — Macros y Energía del día",
+      "item": [
+        {
+          "name": "6.1 GET Macros del día",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": {
+              "raw": "{{BASE_URL}}/nutrition/macros?target_date=2026-04-03",
+              "host": ["{{BASE_URL}}"],
+              "path": ["nutrition","macros"],
+              "query": [{ "key": "target_date", "value": "2026-04-03" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Tiene calories_target', () => pm.expect(pm.response.json().calories_target).to.be.a('number'));"], "type": "text/javascript" }
+          }]
+        },
+        {
+          "name": "6.2 GET Energía del día (exercise + intake + neto)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{TOKEN}}" }],
+            "url": { "raw": "{{BASE_URL}}/v1/days/2026-04-03/energy", "host": ["{{BASE_URL}}"], "path": ["v1","days","2026-04-03","energy"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": ["pm.test('Status 200', () => pm.response.to.have.status(200));", "const d = pm.response.json();", "pm.test('Tiene net_kcal_est', () => pm.expect(d.net_kcal_est).to.be.a('number'));"], "type": "text/javascript" }
+          }]
+        }
+      ]
+    }
+  ]
+}

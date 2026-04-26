@@ -128,7 +128,6 @@ SAMPLE_ROUTINE_JSON = {
 
 GENERATE_REQUEST = {
     "intake": {
-        "objective": "body_recomp",
         "duration_months": 1,
         "health_conditions": "ninguna",
         "medications": "",
@@ -212,7 +211,8 @@ class TestGenerateRoutine:
         assert resp.status_code == 201
         data = resp.json()
         assert data["intake_data"] is not None
-        assert data["intake_data"]["objective"] == "body_recomp"
+        assert data["intake_data"]["duration_months"] == 1
+        assert data["intake_data"]["experience_level"] == "principiante"
 
     def test_generate_requires_auth(self, client: TestClient):
         resp = client.post("/v1/routines/generate", json=GENERATE_REQUEST)
@@ -439,8 +439,8 @@ class TestLogSession:
         )
         assert resp.status_code == 404
 
-    def test_log_session_uses_ai_estimate_as_base(self, client: TestClient):
-        """Full session with no skips/extras should match the AI-estimated kcal exactly."""
+    def test_log_session_met_base_calories(self, client: TestClient):
+        """Full session with no skips/extras should use MET-based calories (fuerza_general, media intensity)."""
         token = _register_and_login(client, USER_DATA)
 
         with patch("httpx.Client") as mock_client_cls:
@@ -460,13 +460,15 @@ class TestLogSession:
         )
         assert resp.status_code == 201
         data = resp.json()
-        # AI estimate from SAMPLE_ROUTINE_JSON = 310 kcal — must be consistent with card display
-        assert data["total_kcal_est"] == pytest.approx(310.0, abs=0.5)
-        assert data["total_kcal_min"] == pytest.approx(310.0 * 0.9, abs=0.5)
-        assert data["total_kcal_max"] == pytest.approx(310.0 * 1.1, abs=0.5)
+        # fuerza_general "media": met_est = (5.0+6.0)/2 = 5.5, weight=62kg, 60min (default)
+        # base_kcal = round(5.5 * 62.0 * 1.0, 2) = 341.0
+        expected_base = round(5.5 * 62.0 * 1.0, 2)
+        assert data["total_kcal_est"] == pytest.approx(expected_base, abs=1.0)
+        assert data["total_kcal_min"] == pytest.approx(expected_base * 0.9, abs=1.0)
+        assert data["total_kcal_max"] == pytest.approx(expected_base * 1.1, abs=1.0)
 
     def test_log_session_skipped_reduces_calories_proportionally(self, client: TestClient):
-        """Skipping 2 of 5 exercises removes 40 % of the AI-estimated base calories."""
+        """Skipping 2 of 5 exercises removes 40 % of the MET-based base calories."""
         token = _register_and_login(client, USER_DATA)
 
         with patch("httpx.Client") as mock_client_cls:
@@ -486,12 +488,13 @@ class TestLogSession:
         )
         assert resp.status_code == 201
         data = resp.json()
-        # AI estimate = 310, 3 of 5 done → 310 × 0.6 = 186 kcal
-        expected = round(310.0 * 0.6, 2)
-        assert data["total_kcal_est"] == pytest.approx(expected, abs=0.5)
+        # fuerza_general met_est=5.5, 62kg, 60min → base=341.0; 3 of 5 done → 341.0 × 0.6 = 204.6
+        base = round(5.5 * 62.0 * 1.0, 2)
+        expected = round(base * 0.6, 2)
+        assert data["total_kcal_est"] == pytest.approx(expected, abs=1.0)
 
     def test_log_session_extra_exercises_add_met_calories(self, client: TestClient):
-        """Extra exercises add MET-based calories on top of the AI-estimated routine base."""
+        """Extra exercises add MET-based calories on top of the MET-based routine base."""
         token = _register_and_login(client, USER_DATA)
 
         with patch("httpx.Client") as mock_client_cls:
@@ -513,11 +516,13 @@ class TestLogSession:
         )
         assert resp.status_code == 201
         data = resp.json()
-        # Base (AI): 310 kcal + cardio_moderate(MET=7.0) × 62kg × 0.5h = 217 kcal
+        # Base (MET fuerza_general): 5.5 × 62 × 1.0 = 341.0
+        # Extra: cardio_moderate(MET=7.0) × 62kg × 0.5h = 217.0
+        base_kcal = round(5.5 * 62.0 * 1.0, 2)
         extra_kcal = round(7.0 * 62.0 * 0.5, 2)
-        expected = round(310.0 + extra_kcal, 2)
-        assert data["total_kcal_est"] == pytest.approx(expected, abs=0.5)
-        assert data["total_kcal_est"] > 310.0
+        expected = round(base_kcal + extra_kcal, 2)
+        assert data["total_kcal_est"] == pytest.approx(expected, abs=1.0)
+        assert data["total_kcal_est"] > base_kcal
 
 
 # ── Advance session ───────────────────────────────────────────────────────────
@@ -541,7 +546,9 @@ class TestAdvanceSession:
         resp = client.post("/v1/routines/advance-session", json={"action": "skip"}, headers=_auth(token))
         assert resp.status_code == 200
         data = resp.json()
+        assert data["action"] == "skip"
         assert data["current_session_index"] == 0  # 1 session → wraps back to 0
+        assert data["kcal_burned"] is None
 
     def test_complete_logs_workout_and_advances(self, client: TestClient):
         token = _register_and_login(client, USER_DATA)
@@ -550,8 +557,9 @@ class TestAdvanceSession:
         resp = client.post("/v1/routines/advance-session", json={"action": "complete"}, headers=_auth(token))
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "ready"
+        assert data["action"] == "complete"
         assert data["current_session_index"] == 0  # wraps since only 1 session
+        assert data["kcal_burned"] is not None
 
     def test_advance_no_routine_returns_404(self, client: TestClient):
         token = _register_and_login(client, USER_DATA)

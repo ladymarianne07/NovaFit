@@ -14,8 +14,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Check,
-  ChevronDown,
   Dumbbell,
   FileUp,
   Pencil,
@@ -25,6 +23,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import IntakeSelect, { IntakeSelectOption } from './IntakeSelect'
 // Plus kept for the "Crear / Reemplazar" trigger button
 import {
   FitnessObjective,
@@ -92,94 +91,6 @@ const mapFitnessObjective = (obj?: FitnessObjective): RoutineIntakeData['objecti
   if (obj === 'fat_loss') return 'fat_loss'
   if (obj === 'muscle_gain') return 'muscle_gain'
   return 'body_recomp'
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
-
-// ── RoutineSelect — portal-based custom dropdown ──────────────────────────────
-
-interface RoutineSelectOption { value: string; label: string }
-
-interface RoutineSelectProps {
-  label: string
-  required?: boolean
-  value: string
-  onChange: (value: string) => void
-  options: RoutineSelectOption[]
-  disabled?: boolean
-}
-
-const RoutineSelect: React.FC<RoutineSelectProps> = ({ label, required, value, onChange, options, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({})
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [isOpen])
-
-  const handleOpen = () => {
-    if (disabled) return
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setPanelStyle({
-        position: 'fixed',
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
-        zIndex: 1300,
-      })
-    }
-    setIsOpen((prev) => !prev)
-  }
-
-  return (
-    <div className="routine-intake-field">
-      <label className="routine-intake-label">
-        {label}{required && <span className="routine-required"> *</span>}
-      </label>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="routine-intake-select routine-select-trigger"
-        onClick={handleOpen}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <span>{selectedLabel}</span>
-        <ChevronDown size={15} style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s ease' }} />
-      </button>
-      {isOpen && createPortal(
-        <div className="custom-select-panel" style={panelStyle} role="listbox">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              role="option"
-              aria-selected={opt.value === value}
-              className={`custom-select-option ${opt.value === value ? 'selected' : ''}`}
-              onClick={() => { onChange(opt.value); setIsOpen(false) }}
-            >
-              <span className="custom-select-option-text">
-                <span className="custom-select-option-label">{opt.label}</span>
-              </span>
-              {opt.value === value && <Check size={15} className="custom-select-check" />}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
-    </div>
-  )
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -305,9 +216,9 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
         setCreateError(data.error_message || 'Error al generar la rutina.')
       }
     } catch (err: unknown) {
-      setCreateError(
-        err instanceof Error ? err.message : 'No se pudo generar la rutina. Intentá de nuevo.',
-      )
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = axiosErr.response?.data?.detail
+      setCreateError(detail ?? (err instanceof Error ? err.message : 'No se pudo generar la rutina. Intentá de nuevo.'))
     } finally {
       setIsGenerating(false)
     }
@@ -324,9 +235,9 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
       if (data.status === 'ready') closeCreateModal()
       else if (data.status === 'error') setCreateError(data.error_message || 'Error al procesar el archivo.')
     } catch (err: unknown) {
-      setCreateError(
-        err instanceof Error ? err.message : 'No se pudo procesar el archivo. Intentá de nuevo.',
-      )
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = axiosErr.response?.data?.detail
+      setCreateError(detail ?? (err instanceof Error ? err.message : 'No se pudo procesar el archivo. Intentá de nuevo.'))
     } finally {
       setIsUploading(false)
     }
@@ -362,9 +273,9 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
         setEditError(data.error_message || 'Error al editar la rutina.')
       }
     } catch (err: unknown) {
-      setEditError(
-        err instanceof Error ? err.message : 'No se pudo editar la rutina. Intentá de nuevo.',
-      )
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = axiosErr.response?.data?.detail
+      setEditError(detail ?? (err instanceof Error ? err.message : 'No se pudo editar la rutina. Intentá de nuevo.'))
     } finally {
       setIsEditing(false)
     }
@@ -546,7 +457,7 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                         />
                         <p className="routine-session-title">{s.title}</p>
                         <span className="routine-session-cal">
-                          {Math.round(s.estimated_calories_per_session)} kcal
+                          {Math.round(5.0 * 70 * ((s.session_duration_minutes ?? 60) / 60))} kcal est.
                         </span>
                       </div>
                       <p className="routine-session-exercises">
@@ -711,28 +622,28 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                   </div>
 
                   <div className="routine-intake-row">
-                    <RoutineSelect
+                    <IntakeSelect
                       label="Frecuencia"
                       value={intake.frequency_days}
                       onChange={(v) => updateIntake('frequency_days', v as RoutineIntakeData['frequency_days'])}
-                      options={FREQUENCY_OPTIONS as unknown as RoutineSelectOption[]}
+                      options={FREQUENCY_OPTIONS as unknown as IntakeSelectOption[]}
                       disabled={isGenerating}
                     />
-                    <RoutineSelect
+                    <IntakeSelect
                       label="Experiencia"
                       value={intake.experience_level}
                       onChange={(v) => updateIntake('experience_level', v as RoutineIntakeData['experience_level'])}
-                      options={EXPERIENCE_OPTIONS as unknown as RoutineSelectOption[]}
+                      options={EXPERIENCE_OPTIONS as unknown as IntakeSelectOption[]}
                       disabled={isGenerating}
                     />
                   </div>
 
                   <div className="routine-intake-row">
-                    <RoutineSelect
+                    <IntakeSelect
                       label="Equipamiento"
                       value={intake.equipment}
                       onChange={(v) => updateIntake('equipment', v as RoutineIntakeData['equipment'])}
-                      options={EQUIPMENT_OPTIONS as unknown as RoutineSelectOption[]}
+                      options={EQUIPMENT_OPTIONS as unknown as IntakeSelectOption[]}
                       disabled={isGenerating}
                     />
                     <div className="routine-intake-field">
@@ -744,7 +655,7 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                           type="number"
                           className="routine-intake-select"
                           min={1}
-                          max={12}
+                          max={3}
                           value={intake.duration_months === 0 ? '' : intake.duration_months}
                           onChange={(e) => {
                             const raw = e.target.value
@@ -752,7 +663,7 @@ const RoutineModule: React.FC<RoutineModuleProps> = ({ className }) => {
                               updateIntake('duration_months', 0)
                             } else {
                               const n = parseInt(raw, 10)
-                              if (!isNaN(n) && n >= 1 && n <= 12) updateIntake('duration_months', n)
+                              if (!isNaN(n) && n >= 1 && n <= 3) updateIntake('duration_months', n)
                             }
                           }}
                           placeholder="1"

@@ -40,9 +40,9 @@ const SESSION_A = {
   day_label: 'Día 1 · Pecho y Espalda',
   title: 'Pecho y Espalda',
   color: '#c8f55a',
-  estimated_calories_per_session: 320,
+  session_duration_minutes: 60,
   exercises: [
-    { id: 'ex1', name: 'Press de banca', muscle: 'Pectoral', group: 'Empuje', estimated_calories: 45 },
+    { id: 'ex1', name: 'Press de banca', muscle: 'Pectoral', group: 'Empuje' },
   ],
 }
 
@@ -53,9 +53,9 @@ const SESSION_B = {
   day_label: 'Día 2 · Pierna',
   title: 'Pierna',
   color: '#ff6b6b',
-  estimated_calories_per_session: 380,
+  session_duration_minutes: 75,
   exercises: [
-    { id: 'ex2', name: 'Sentadilla', muscle: 'Cuádriceps', group: 'Piernas', estimated_calories: 60 },
+    { id: 'ex2', name: 'Sentadilla', muscle: 'Cuádriceps', group: 'Piernas' },
   ],
 }
 
@@ -106,7 +106,7 @@ describe('WorkoutModule — Mis Entrenos tab', () => {
       expect(screen.getByText('Pecho y Espalda')).toBeInTheDocument()
     })
     expect(screen.getByText(/próximo entrenamiento/i)).toBeInTheDocument()
-    expect(screen.getByText(/320 kcal/i)).toBeInTheDocument()
+    expect(screen.getByText(/350 kcal/i)).toBeInTheDocument()
   })
 
   it('shows session B when index is 1', async () => {

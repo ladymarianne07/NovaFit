@@ -18,6 +18,8 @@ from ..core.custom_exceptions import (
     WorkoutValidationError,
     WorkoutWeightRequiredError,
 )
+from ..core.exception_handlers import service_error_handler
+from ..core.user_helpers import extract_weight_kg, get_current_user_id
 
 
 router = APIRouter(prefix="/v1", tags=["workout"])
@@ -31,44 +33,38 @@ async def create_workout_session(
 ):
     """Create a workout session and recalculate daily exercise energy."""
     try:
-        user_data = current_user  # keep name for readability in getattr usage
-        weight_kg = payload.weight_kg
-        if weight_kg is None:
-            weight_kg = float(getattr(user_data, "weight_kg", 0.0) or 0.0)
+        with service_error_handler("Failed to create workout session"):
+            user_data = current_user  # keep name for readability in getattr usage
+            weight_kg = payload.weight_kg
+            if weight_kg is None:
+                weight_kg = extract_weight_kg(user_data)
 
-        blocks_data: list[dict[str, Any]] = [
-            {
-                "activity": block.activity,
-                "duration_minutes": block.duration_minutes,
-                "intensity": block.intensity,
-            }
-            for block in payload.blocks
-        ]
+            blocks_data: list[dict[str, Any]] = [
+                {
+                    "activity": block.activity,
+                    "duration_minutes": block.duration_minutes,
+                    "intensity": block.intensity,
+                }
+                for block in payload.blocks
+            ]
 
-        session = WorkoutService.create_session(
-            db=db,
-            user_id=int(getattr(user_data, "id")),
-            session_date=payload.session_date,
-            source=payload.source,
-            status=payload.status,
-            blocks_data=blocks_data,
-            weight_kg=weight_kg,
-            raw_input=payload.raw_input,
-            ai_output=payload.ai_output,
-        )
-        return session
+            session = WorkoutService.create_session(
+                db=db,
+                user_id=get_current_user_id(user_data),
+                session_date=payload.session_date,
+                source=payload.source,
+                status=payload.status,
+                blocks_data=blocks_data,
+                weight_kg=weight_kg,
+                raw_input=payload.raw_input,
+                ai_output=payload.ai_output,
+            )
+            return session
 
     except WorkoutActivityNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except (WorkoutValidationError, WorkoutWeightRequiredError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create workout session",
-        )
 
 
 @router.get("/days/{target_date}/energy", response_model=DailyEnergyResponse)
@@ -78,20 +74,13 @@ async def get_daily_energy(
     db: Session = Depends(get_database_session),
 ):
     """Return daily exercise + intake + net energy totals for a date."""
-    try:
+    with service_error_handler("Failed to retrieve daily energy"):
         daily_log = WorkoutService.get_daily_energy(
             db=db,
-            user_id=int(getattr(current_user, "id")),
+            user_id=get_current_user_id(current_user),
             log_date=target_date,
         )
         return daily_log
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve daily energy",
-        )
 
 
 @router.get("/sessions", response_model=list[WorkoutSessionResponse])
@@ -103,22 +92,15 @@ async def list_workout_sessions(
     db: Session = Depends(get_database_session),
 ):
     """List current user's workout sessions, optionally filtered by date."""
-    try:
+    with service_error_handler("Failed to list workout sessions"):
         sessions = WorkoutService.list_sessions(
             db=db,
-            user_id=int(getattr(current_user, "id")),
+            user_id=get_current_user_id(current_user),
             session_date=session_date,
             limit=limit,
             offset=offset,
         )
         return sessions
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list workout sessions",
-        )
 
 
 @router.delete("/sessions/{session_id}")
@@ -128,20 +110,13 @@ async def delete_workout_session(
     db: Session = Depends(get_database_session),
 ):
     """Delete a workout session and refresh daily energy aggregation."""
-    try:
+    with service_error_handler("Failed to delete workout session"):
         deleted = WorkoutService.delete_session(
             db=db,
-            user_id=int(getattr(current_user, "id")),
+            user_id=get_current_user_id(current_user),
             session_id=session_id,
         )
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout session not found")
 
         return {"status": "deleted"}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete workout session",
-        )

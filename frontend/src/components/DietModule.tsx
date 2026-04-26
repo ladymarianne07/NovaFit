@@ -7,11 +7,9 @@
  *   3. Edit mode: describe changes → AI updates the diet
  *   4. HTML viewer modal with self-contained styled document
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Check,
-  ChevronDown,
   Dumbbell,
   Pencil,
   Plus,
@@ -21,12 +19,14 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import IntakeSelect, { IntakeSelectOption } from './IntakeSelect'
 import {
   DietEditRequest,
   DietGenerateRequest,
   DietIntakeData,
   UserDietResponse,
   dietAPI,
+  routineAPI,
 } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -58,89 +58,24 @@ const DEFAULT_INTAKE: DietIntakeData = {
   disliked_foods: '',
   budget_level: 'moderado',
   cooking_time: 'moderado (30-45 min)',
-  meal_timing_preference: '',
+  training_days: [],
 }
 
-// ── RoutineSelect reused pattern — portal-based dropdown ──────────────────────
+const DAYS_OF_WEEK = [
+  { value: 'lunes', label: 'Lu' },
+  { value: 'martes', label: 'Ma' },
+  { value: 'miércoles', label: 'Mi' },
+  { value: 'jueves', label: 'Ju' },
+  { value: 'viernes', label: 'Vi' },
+  { value: 'sábado', label: 'Sá' },
+  { value: 'domingo', label: 'Do' },
+] as const
 
-interface SelectOption { value: string; label: string }
-interface DietSelectProps {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  options: SelectOption[]
-  disabled?: boolean
-}
-
-const DietSelect: React.FC<DietSelectProps> = ({ label, value, onChange, options, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({})
-  const selectedLabel = options.find((o) => o.value === value)?.label ?? ''
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [isOpen])
-
-  const handleOpen = () => {
-    if (disabled) return
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      setPanelStyle({
-        position: 'fixed',
-        top: rect.bottom + 6,
-        left: rect.left,
-        width: rect.width,
-        zIndex: 1300,
-      })
-    }
-    setIsOpen((prev) => !prev)
-  }
-
-  return (
-    <div className="routine-intake-field">
-      <label className="routine-intake-label">{label}</label>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="routine-intake-select routine-select-trigger"
-        onClick={handleOpen}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-      >
-        <span>{selectedLabel}</span>
-        <ChevronDown size={15} style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s ease' }} />
-      </button>
-      {isOpen && createPortal(
-        <div className="custom-select-panel" style={panelStyle} role="listbox">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              role="option"
-              aria-selected={opt.value === value}
-              className={`custom-select-option ${opt.value === value ? 'selected' : ''}`}
-              onClick={() => { onChange(opt.value); setIsOpen(false) }}
-            >
-              <span className="custom-select-option-text">
-                <span className="custom-select-option-label">{opt.label}</span>
-              </span>
-              {opt.value === value && <Check size={15} className="custom-select-check" />}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
-    </div>
-  )
+// Maps routine frequency_days to a default set of training days
+const FREQUENCY_TO_DAYS: Record<string, string[]> = {
+  '2':   ['martes', 'jueves'],
+  '3-4': ['lunes', 'miércoles', 'viernes'],
+  '5+':  ['lunes', 'martes', 'miércoles', 'jueves', 'viernes'],
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -177,6 +112,9 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
   // Day tab (training vs rest)
   const [dayTab, setDayTab] = useState<DayTab>('training')
 
+  // Suggested training days from active routine
+  const [suggestedDays, setSuggestedDays] = useState<string[]>([])
+
   // Expanded meal card
   const [expandedMealId, setExpandedMealId] = useState<string | null>(null)
 
@@ -195,10 +133,33 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
 
   useEffect(() => { loadDiet() }, [loadDiet])
 
+  // Pre-fill suggested training days from active routine on modal open
+  useEffect(() => {
+    if (!showCreateModal) return
+    routineAPI.getActive().then((routine) => {
+      const freq = routine.intake_data?.frequency_days as string | undefined
+      if (freq && FREQUENCY_TO_DAYS[freq]) {
+        setSuggestedDays(FREQUENCY_TO_DAYS[freq])
+      }
+    }).catch(() => {
+      // No routine — suggestions remain empty
+    })
+  }, [showCreateModal])
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   const updateIntake = <K extends keyof DietIntakeData>(field: K, value: DietIntakeData[K]) =>
     setIntake((prev) => ({ ...prev, [field]: value }))
+
+  const toggleTrainingDay = (day: string) => {
+    setIntake((prev) => {
+      const days = prev.training_days ?? []
+      return {
+        ...prev,
+        training_days: days.includes(day) ? days.filter((d) => d !== day) : [...days, day],
+      }
+    })
+  }
 
   const openCreateModal = () => {
     setCreateError('')
@@ -247,9 +208,9 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
         setCreateError(data.error_message || 'Error al generar la dieta.')
       }
     } catch (err: unknown) {
-      setCreateError(
-        err instanceof Error ? err.message : 'No se pudo generar la dieta. Intentá de nuevo.',
-      )
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = axiosErr.response?.data?.detail
+      setCreateError(detail ?? (err instanceof Error ? err.message : 'No se pudo generar la dieta. Intentá de nuevo.'))
     } finally {
       setIsGenerating(false)
     }
@@ -272,9 +233,9 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
         setEditError(data.error_message || 'Error al editar la dieta.')
       }
     } catch (err: unknown) {
-      setEditError(
-        err instanceof Error ? err.message : 'No se pudo editar la dieta. Intentá de nuevo.',
-      )
+      const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = axiosErr.response?.data?.detail
+      setEditError(detail ?? (err instanceof Error ? err.message : 'No se pudo editar la dieta. Intentá de nuevo.'))
     } finally {
       setIsEditing(false)
     }
@@ -452,7 +413,7 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
                 </div>
                 <div className="diet-macro-chip carbs">
                   <span className="diet-macro-value">{Math.round(activeDay.total_carbs_g)}g</span>
-                  <span className="diet-macro-label">HC</span>
+                  <span className="diet-macro-label">Carbos</span>
                 </div>
                 <div className="diet-macro-chip fat">
                   <span className="diet-macro-value">{Math.round(activeDay.total_fat_g)}g</span>
@@ -482,14 +443,11 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
                       >
                         <div className="diet-meal-header">
                           <span className="diet-meal-name">{meal.name}</span>
-                          {meal.time && (
-                            <span className="diet-meal-time">{meal.time}</span>
-                          )}
                           <span className="diet-meal-kcal">{Math.round(meal.total_calories)} kcal</span>
                         </div>
                         <div className="diet-meal-macros">
                           <span>P: {Math.round(meal.total_protein_g)}g</span>
-                          <span>HC: {Math.round(meal.total_carbs_g)}g</span>
+                          <span>Carbos: {Math.round(meal.total_carbs_g)}g</span>
                           <span>G: {Math.round(meal.total_fat_g)}g</span>
                           <span className="diet-meal-foods-count">{meal.foods.length} alimentos</span>
                         </div>
@@ -505,7 +463,7 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
                               </div>
                               <div className="diet-food-detail">
                                 <span>{food.portion}</span>
-                                <span>P:{Math.round(food.protein_g)}g · HC:{Math.round(food.carbs_g)}g · G:{Math.round(food.fat_g)}g</span>
+                                <span>P:{Math.round(food.protein_g)}g · Carbos:{Math.round(food.carbs_g)}g · G:{Math.round(food.fat_g)}g</span>
                               </div>
                               {food.notes && (
                                 <p className="diet-food-notes">{food.notes}</p>
@@ -568,7 +526,7 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
               </button>
             </div>
 
-            <div className="diet-ai-creator">
+            <div className="routine-ai-creator">
               {/* Profile macros reminder */}
               {user?.target_calories && (
                 <div className="diet-profile-summary">
@@ -576,7 +534,7 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
                   <div className="diet-profile-pills">
                     <span>{Math.round(user.target_calories)} kcal</span>
                     {user.protein_target_g && <span>P: {Math.round(user.protein_target_g)}g</span>}
-                    {user.carbs_target_g && <span>HC: {Math.round(user.carbs_target_g)}g</span>}
+                    {user.carbs_target_g && <span>Carbos: {Math.round(user.carbs_target_g)}g</span>}
                     {user.fat_target_g && <span>G: {Math.round(user.fat_target_g)}g</span>}
                   </div>
                   <p className="diet-profile-note">
@@ -686,35 +644,60 @@ const DietModule: React.FC<DietModuleProps> = ({ className }) => {
                 </div>
 
                 <div className="routine-intake-row">
-                  <DietSelect
+                  <IntakeSelect
                     label="Presupuesto"
                     value={intake.budget_level}
                     onChange={(v) => updateIntake('budget_level', v)}
-                    options={BUDGET_OPTIONS as unknown as SelectOption[]}
+                    options={BUDGET_OPTIONS as unknown as IntakeSelectOption[]}
                     disabled={isGenerating}
                   />
-                  <DietSelect
+                  <IntakeSelect
                     label="Tiempo de cocción"
                     value={intake.cooking_time}
                     onChange={(v) => updateIntake('cooking_time', v)}
-                    options={COOKING_TIME_OPTIONS as unknown as SelectOption[]}
+                    options={COOKING_TIME_OPTIONS as unknown as IntakeSelectOption[]}
                     disabled={isGenerating}
                   />
                 </div>
 
                 <div className="routine-intake-field">
                   <label className="routine-intake-label">
-                    Horario de comidas preferido{' '}
-                    <span className="routine-optional">(opcional)</span>
+                    Días de entrenamiento{' '}
+                    <span className="routine-optional">(para ajustar calorías según el día)</span>
                   </label>
-                  <textarea
-                    className="routine-intake-textarea"
-                    placeholder="Ej: Desayuno a las 7, almuerzo a las 13, merienda a las 17, cena a las 21."
-                    value={intake.meal_timing_preference}
-                    onChange={(e) => updateIntake('meal_timing_preference', e.target.value)}
-                    rows={2}
-                    disabled={isGenerating}
-                  />
+                  {suggestedDays.length > 0 && (intake.training_days ?? []).length === 0 && (
+                    <div className="diet-suggested-days-banner">
+                      <span>Tu rutina sugiere: <strong>{suggestedDays.join(', ')}</strong></span>
+                      <button
+                        type="button"
+                        className="diet-suggested-days-apply"
+                        onClick={() => updateIntake('training_days', suggestedDays)}
+                        disabled={isGenerating}
+                      >
+                        Usar estos días
+                      </button>
+                    </div>
+                  )}
+                  <div className="diet-days-grid">
+                    {DAYS_OF_WEEK.map(({ value, label }) => {
+                      const isSelected = (intake.training_days ?? []).includes(value)
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`diet-day-chip${isSelected ? ' active' : ''}`}
+                          onClick={() => toggleTrainingDay(value)}
+                          disabled={isGenerating}
+                          aria-pressed={isSelected}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="routine-intake-hint">
+                    Dejá vacío si no entrenás o no querés distinción entre días.
+                  </p>
                 </div>
               </div>
 

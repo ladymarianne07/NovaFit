@@ -2,173 +2,27 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
+from datetime import date as date_type
 from typing import Any, cast
 
 import httpx
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..config import settings
+from ..constants import DietConstants
 from ..core.custom_exceptions import DietNotFoundError, DietParsingError
 from ..db.models import UserDiet, UserRoutine
+from ..templates.diet import DIET_JSON_SCHEMA, DIET_SYSTEM_PROMPT
+from .base_ai_generation_service import BaseAIGenerationService
 
 logger = logging.getLogger(__name__)
 
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-
-# ── JSON schema instructions ──────────────────────────────────────────────────
-
-_DIET_JSON_SCHEMA = """
-Return ONLY valid JSON — no markdown, no code fences, no explanations.
-The JSON must follow this exact structure:
-
-{
-  "title": "Plan de alimentación personalizado",
-  "description": "2-3 sentences describing the diet approach, objective, and why these calories/macros were chosen",
-  "objective_label": "Pérdida de grasa / Recomposición corporal / etc.",
-  "target_calories_rest": 1800,
-  "target_calories_training": 2200,
-  "target_protein_g": 150,
-  "target_carbs_g": 200,
-  "target_fat_g": 60,
-  "water_ml_rest": 2500,
-  "water_ml_training": 3200,
-  "water_notes": "Brief explanation of how water intake was calculated",
-  "training_day": {
-    "day_type": "training",
-    "label": "Día de entrenamiento",
-    "total_calories": 2200,
-    "total_protein_g": 160,
-    "total_carbs_g": 240,
-    "total_fat_g": 62,
-    "water_ml": 3200,
-    "notes": "Optional general notes for training days",
-    "meals": [
-      {
-        "id": "breakfast",
-        "name": "Desayuno",
-        "time": "07:00 - 08:00",
-        "total_calories": 480,
-        "total_protein_g": 28,
-        "total_carbs_g": 60,
-        "total_fat_g": 12,
-        "notes": "Optional notes about this meal (timing, pre/post workout context, etc.)",
-        "foods": [
-          {
-            "name": "Avena con leche descremada",
-            "portion": "80g avena + 250ml leche",
-            "calories": 350,
-            "protein_g": 18,
-            "carbs_g": 52,
-            "fat_g": 6,
-            "notes": ""
-          },
-          {
-            "name": "Banana",
-            "portion": "1 unidad mediana (120g)",
-            "calories": 110,
-            "protein_g": 1,
-            "carbs_g": 28,
-            "fat_g": 0,
-            "notes": ""
-          }
-        ]
-      }
-    ]
-  },
-  "rest_day": {
-    "day_type": "rest",
-    "label": "Día de descanso",
-    "total_calories": 1800,
-    "total_protein_g": 150,
-    "total_carbs_g": 180,
-    "total_fat_g": 55,
-    "water_ml": 2500,
-    "notes": "Optional general notes for rest days",
-    "meals": []
-  },
-  "health_notes": [
-    "Tip or health note related to the user's conditions",
-    "Another relevant tip"
-  ],
-  "supplement_suggestions": "Optional brief supplement suggestion based on objective (or empty string)",
-  "nutritional_summary": "1-2 sentence summary of the overall plan and expected results"
-}
-
-Rules:
-- title: concise and motivating
-- description: explain the calorie split between training and rest days, and why macros were set as they were
-- training_day.total_calories must equal sum of all meal calories (within ±5 kcal rounding)
-- rest_day.total_calories must equal sum of all rest day meal calories (within ±5 kcal rounding)
-- Each food's calories must approximately equal: protein_g×4 + carbs_g×4 + fat_g×9
-- meal ids: short lowercase alphanumeric with underscores (e.g. breakfast, lunch, dinner, snack_1, post_workout)
-- Meal times should be realistic based on typical Argentine schedule and user preferences
-- Water: base = weight_kg × 35 ml/kg, add 500-700 ml on training days; minimum 2000 ml rest / 2500 ml training
-- Foods: use specific Argentine/regional names when applicable (palta, batata, yerba mate, etc.)
-- Portions: always include amount (grams, ml, units) in parentheses
-- Keep all text in Spanish (rioplatense tone)
-- health_notes: 2-4 practical tips relevant to the user's conditions, restrictions, or objective
-- supplement_suggestions: only if clearly beneficial for objective; empty string if none warranted
-- DO NOT include foods that violate dietary_restrictions or food_allergies
-- DO NOT include disliked_foods listed by the user
-- training_day and rest_day should share the same meal structure but differ in calorie totals and portion sizes
-- The extra calories on training days should come primarily from carbohydrates (pre/post workout meals)
-"""
-
-_DIET_SYSTEM_PROMPT = """Sos un nutricionista deportivo especializado en nutrición basada en evidencia científica, trabajando para NovaFitness.
-
-PRINCIPIO FUNDAMENTAL — PRECISIÓN NUTRICIONAL:
-Cada plan de alimentación debe alcanzar EXACTAMENTE los objetivos calóricos y de macronutrientes del usuario.
-Los totales de cada día deben coincidir con las metas (tolerancia ±5% por redondeo).
-
-CÁLCULO DE CALORÍAS POR TIPO DE DÍA:
-- Día de descanso: usar exactamente las calorías objetivo del perfil del usuario (target_calories)
-- Día de entrenamiento: target_calories + calorías quemadas en la sesión de entrenamiento
-  * Si hay rutina activa, usar las kcal estimadas por sesión de la rutina
-  * Si no hay rutina, estimar según tipo de entrenamiento y duración declarada
-  * Las calorías extra en días de entrenamiento deben provenir principalmente de carbohidratos
-
-DISTRIBUCIÓN DE MACRONUTRIENTES:
-- Respetar exactamente los porcentajes/gramos del perfil del usuario
-- En días de entreno: aumentar carbohidratos principalmente (combustible para el ejercicio)
-- Proteína: distribuir uniformemente en todas las comidas (mínimo 20-30g por comida principal)
-- Grasas: evitar en la comida pre-entrenamiento, distribuir en las demás
-
-ESTRUCTURA DE COMIDAS:
-- Pre-entrenamiento (1-2h antes): rico en carbohidratos complejos, moderado en proteína, bajo en grasa
-- Post-entrenamiento (dentro de 1h): proteína + carbohidratos simples (recuperación y síntesis proteica)
-- Resto del día: distribución equilibrada
-
-AGUA:
-- Base: peso_corporal (kg) × 35 ml
-- Agregar 500-700 ml en días de entrenamiento
-- Ajustar si hay condiciones que lo requieran (riñones, diabetes, etc.)
-- Explicar brevemente el cálculo
-
-RESTRICCIONES Y ALERGIAS — OBLIGATORIO:
-- Verificar CADA alimento contra restricciones dietéticas y alergias declaradas
-- Si hay restricción vegetariana: eliminar TODAS las carnes, aves y mariscos
-- Si hay restricción vegana: eliminar además lácteos, huevos y miel
-- Si hay intolerancia al gluten: eliminar trigo, avena convencional, cebada, centeno
-- Si hay intolerancia a la lactosa: reemplazar lácteos por alternativas vegetales
-- Si hay alergia a frutos secos: excluir completamente todos los frutos secos y derivados
-
-CONDICIONES DE SALUD RELEVANTES:
-- Diabetes tipo 2: priorizar carbohidratos de bajo índice glucémico, evitar azúcares simples
-- Hipertensión: reducir sodio, aumentar potasio y magnesio
-- Hipotiroidismo: evitar exceso de alimentos bociógenos crudos
-- Síndrome de intestino irritable: evitar alimentos FODMAPs altos
-- Hiperuricemia/gota: limitar purinas (vísceras, mariscos, fructosa)
-- Anemia: priorizar hierro hem + vitamina C en la misma comida
-
-PRESUPUESTO Y TIEMPO DE COCCIÓN:
-- Económico: proteínas de huevo, legumbres, pollo muslo, arroz, avena, banana
-- Moderado: incluir salmón, queso, palta, frutas variadas
-- Sin límite: incluir proteínas premium, superalimentos, suplementos de calidad
-- Mínimo tiempo: priorizar preparaciones simples (yogur + frutas, huevos revueltos, ensaladas)
-"""
 
 
 def _build_diet_generation_prompt(
@@ -237,7 +91,12 @@ def _build_diet_generation_prompt(
     disliked_foods = intake.get("disliked_foods", "") or "Ninguno declarado"
     budget_level = intake.get("budget_level", "moderado")
     cooking_time = intake.get("cooking_time", "moderado")
-    meal_timing = intake.get("meal_timing_preference", "") or "Sin preferencia horaria específica"
+    training_days: list[str] = intake.get("training_days") or []
+
+    if training_days:
+        training_days_section = f"DÍAS DE ENTRENAMIENTO: {', '.join(training_days)}"
+    else:
+        training_days_section = "DÍAS DE ENTRENAMIENTO: No especificados — training_day y rest_day deben ser idénticos en estructura"
 
     free_text_section = (
         f"\nINFORMACIÓN ADICIONAL DEL USUARIO:\n{free_text.strip()}"
@@ -245,7 +104,7 @@ def _build_diet_generation_prompt(
         else ""
     )
 
-    return f"""{_DIET_SYSTEM_PROMPT}
+    return f"""{DIET_SYSTEM_PROMPT}
 
 ---
 
@@ -267,7 +126,7 @@ ALIMENTOS QUE NO LE GUSTAN: {disliked_foods}
 CANTIDAD DE COMIDAS POR DÍA: {meals_count}
 PRESUPUESTO: {budget_level}
 TIEMPO DE COCCIÓN: {cooking_time}
-PREFERENCIA DE HORARIOS: {meal_timing}
+{training_days_section}
 {free_text_section}
 
 ---
@@ -280,12 +139,12 @@ TU TAREA:
 5. Asegurar que los totales diarios coincidan con los objetivos (tolerancia ±5%)
 6. Calcular el consumo de agua diario
 
-{_DIET_JSON_SCHEMA}"""
+{DIET_JSON_SCHEMA}"""
 
 
 def _build_diet_edit_prompt(current_diet_data: dict[str, Any], edit_instruction: str) -> str:
     """Build the prompt for editing an existing diet plan."""
-    return f"""{_DIET_SYSTEM_PROMPT}
+    return f"""{DIET_SYSTEM_PROMPT}
 
 ---
 
@@ -306,26 +165,15 @@ TU TAREA:
 4. Re-calcular totales calóricos y de macros si se agregan/eliminan alimentos
 5. Asegurar que los totales diarios sigan coincidiendo con los objetivos
 
-{_DIET_JSON_SCHEMA}"""
+{DIET_JSON_SCHEMA}"""
 
 
-def _generate_diet_html(diet_data: dict[str, Any]) -> str:
-    """Generate a self-contained HTML document for the diet plan."""
-    title = diet_data.get("title", "Plan de Alimentación")
-    description = diet_data.get("description", "")
-    objective_label = diet_data.get("objective_label", "")
-    training_day = diet_data.get("training_day", {})
-    rest_day = diet_data.get("rest_day", {})
-    health_notes = diet_data.get("health_notes", [])
-    supplement_suggestions = diet_data.get("supplement_suggestions", "")
-    nutritional_summary = diet_data.get("nutritional_summary", "")
-    water_notes = diet_data.get("water_notes", "")
-
-    def render_meals(day: dict[str, Any]) -> str:
-        meals_html = ""
-        for meal in day.get("meals", []):
-            foods_html = "".join(
-                f"""<tr>
+def _render_meals(day: dict[str, Any]) -> str:
+    """Render the meal cards for a given day (training or rest)."""
+    meals_html = ""
+    for meal in day.get("meals", []):
+        foods_html = "".join(
+            f"""<tr>
                     <td>{f['name']}</td>
                     <td>{f['portion']}</td>
                     <td style="text-align:right">{round(f['calories'])} kcal</td>
@@ -333,13 +181,12 @@ def _generate_diet_html(diet_data: dict[str, Any]) -> str:
                     <td style="text-align:right">{round(f['carbs_g'])}g</td>
                     <td style="text-align:right">{round(f['fat_g'])}g</td>
                 </tr>"""
-                for f in meal.get("foods", [])
-            )
-            meal_note = f"<p style='margin:4px 0 0 0;font-size:0.82em;opacity:0.75;font-style:italic'>{meal.get('notes','')}</p>" if meal.get("notes") else ""
-            meals_html += f"""<div class="meal-card">
+            for f in meal.get("foods", [])
+        )
+        meal_note = f"<p style='margin:4px 0 0 0;font-size:0.82em;opacity:0.75;font-style:italic'>{meal.get('notes','')}</p>" if meal.get("notes") else ""
+        meals_html += f"""<div class="meal-card">
   <div class="meal-header">
     <span class="meal-name">{meal['name']}</span>
-    <span class="meal-time">{meal.get('time','')}</span>
     <span class="meal-kcal">{round(meal['total_calories'])} kcal</span>
   </div>
   <table class="food-table">
@@ -354,11 +201,138 @@ def _generate_diet_html(diet_data: dict[str, Any]) -> str:
   </table>
   {meal_note}
 </div>"""
-        return meals_html
+    return meals_html
 
+
+def _render_day_section(day: dict[str, Any], emoji: str, title: str) -> str:
+    """Render the full HTML section for a training or rest day."""
+    meals_html = _render_meals(day)
+    return f"""<div class="day-section">
+  <p class="day-title">{emoji} {title}</p>
+  <div class="day-totals">
+    <div class="macro-pill">Calorías: <span>{round(day.get('total_calories', 0))} kcal</span></div>
+    <div class="macro-pill">Proteína: <span>{round(day.get('total_protein_g', 0))}g</span></div>
+    <div class="macro-pill">HC: <span>{round(day.get('total_carbs_g', 0))}g</span></div>
+    <div class="macro-pill">Grasas: <span>{round(day.get('total_fat_g', 0))}g</span></div>
+    <div class="water-pill">💧 {day.get('water_ml', 0)} ml agua</div>
+  </div>
+  {meals_html}
+</div>"""
+
+
+def _build_diet_notes_section(
+    health_notes: list[str],
+    supplement_suggestions: str,
+    water_notes: str,
+    nutritional_summary: str,
+) -> str:
+    """Render the recommendations/notes section at the bottom of the diet page."""
     health_notes_html = "".join(f"<li>{note}</li>" for note in health_notes)
     supplement_html = f"<p class='supplement'><strong>Suplementación:</strong> {supplement_suggestions}</p>" if supplement_suggestions else ""
     water_note_html = f"<p class='water-note'>{water_notes}</p>" if water_notes else ""
+    return f"""<div class="notes-section">
+  <p class="notes-title">📋 Recomendaciones</p>
+  <ul>{health_notes_html}</ul>
+  {supplement_html}
+  {water_note_html}
+  <p class="summary">{nutritional_summary}</p>
+</div>"""
+
+
+def _build_diet_stylesheet() -> str:
+    """Return the <style> block for the diet HTML document."""
+    return """<style>
+  :root {
+    --bg: #0d0d1a;
+    --card: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.12);
+    --accent: #00f2c3;
+    --text: rgba(255,255,255,0.9);
+    --muted: rgba(255,255,255,0.55);
+  }
+  [data-theme="original"] {
+    --bg: #1a0a2e;
+    --card: rgba(139,92,246,0.1);
+    --border: rgba(139,92,246,0.25);
+    --accent: #00f2c3;
+    --text: #f0ede8;
+    --muted: rgba(240,237,232,0.55);
+  }
+  html[data-theme="original"] { background: linear-gradient(135deg, #1a0a2e 0%, #2d1060 50%, #1a0a2e 100%); }
+  [data-theme="light"] {
+    --bg: #e8f8fa;
+    --card: rgba(255,255,255,0.75);
+    --border: rgba(0,0,0,0.12);
+    --accent: #00c8d8;
+    --text: #0a1a1e;
+    --muted: rgba(10,26,30,0.6);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 1rem; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; color: var(--accent); margin-bottom: 0.25rem; }
+  .objective { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+  .description { font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem; color: var(--muted); }
+  .theme-btns { display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+  .theme-btn { padding:0.4rem 0.9rem; border-radius:20px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; font-size:0.82rem; }
+  .theme-btn.active { background:var(--accent); color:#0a1a1e; border-color:var(--accent); }
+  .day-section { margin-bottom: 2rem; }
+  .day-title { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+  .day-totals { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .macro-pill { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+  .macro-pill span { color: var(--accent); font-weight: 700; }
+  .water-pill { background: rgba(0,180,255,0.15); border: 1px solid rgba(0,180,255,0.3); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+  .meal-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; }
+  .meal-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+  .meal-name { font-weight: 700; font-size: 0.95rem; flex: 1; }
+  .meal-kcal { font-size: 0.85rem; color: var(--accent); font-weight: 600; margin-left: auto; }
+  .food-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .food-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--border); }
+  .food-table td { padding: 0.3rem 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .notes-section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-top: 1.5rem; }
+  .notes-title { font-size: 0.9rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }
+  .notes-section ul { padding-left: 1.2rem; }
+  .notes-section li { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; line-height: 1.5; }
+  .supplement { margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); }
+  .water-note { margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted); font-style: italic; }
+  .summary { margin-top: 1rem; font-size: 0.88rem; color: var(--muted); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+  @media (max-width: 600px) {
+    .food-table th:nth-child(4), .food-table td:nth-child(4),
+    .food-table th:nth-child(5), .food-table td:nth-child(5),
+    .food-table th:nth-child(6), .food-table td:nth-child(6) { display: none; }
+  }
+</style>"""
+
+
+def _build_diet_scripts() -> str:
+    """Return the <script> block for the diet HTML document."""
+    return """<script>
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+document.documentElement.setAttribute('data-theme', 'original');
+</script>"""
+
+
+def _generate_diet_html(diet_data: dict[str, Any]) -> str:
+    """Generate a self-contained HTML document for the diet plan."""
+    title = diet_data.get("title", "Plan de Alimentación")
+    description = diet_data.get("description", "")
+    objective_label = diet_data.get("objective_label", "")
+    training_day = diet_data.get("training_day", {})
+    rest_day = diet_data.get("rest_day", {})
+
+    stylesheet = _build_diet_stylesheet()
+    training_section = _render_day_section(training_day, "🏋️", "Día de Entrenamiento")
+    rest_section = _render_day_section(rest_day, "😴", "Día de Descanso")
+    notes_section = _build_diet_notes_section(
+        health_notes=diet_data.get("health_notes", []),
+        supplement_suggestions=diet_data.get("supplement_suggestions", ""),
+        water_notes=diet_data.get("water_notes", ""),
+        nutritional_summary=diet_data.get("nutritional_summary", ""),
+    )
+    scripts = _build_diet_scripts()
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -366,109 +340,25 @@ def _generate_diet_html(diet_data: dict[str, Any]) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<style>
-  :root {{
-    --bg: #0d0d1a;
-    --card: rgba(255,255,255,0.06);
-    --border: rgba(255,255,255,0.12);
-    --accent: #00f2c3;
-    --text: rgba(255,255,255,0.9);
-    --muted: rgba(255,255,255,0.55);
-  }}
-  [data-theme="light"] {{
-    --bg: #e8f8fa;
-    --card: rgba(255,255,255,0.75);
-    --border: rgba(0,0,0,0.12);
-    --accent: #00c8d8;
-    --text: #0a1a1e;
-    --muted: rgba(10,26,30,0.6);
-  }}
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; padding: 1rem; max-width: 900px; margin: 0 auto; }}
-  h1 {{ font-size: 1.5rem; color: var(--accent); margin-bottom: 0.25rem; }}
-  .objective {{ font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }}
-  .description {{ font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem; color: var(--muted); }}
-  .theme-btns {{ display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }}
-  .theme-btn {{ padding:0.4rem 0.9rem; border-radius:20px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; font-size:0.82rem; }}
-  .theme-btn.active {{ background:var(--accent); color:#0a1a1e; border-color:var(--accent); }}
-  .day-section {{ margin-bottom: 2rem; }}
-  .day-title {{ font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }}
-  .day-totals {{ display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }}
-  .macro-pill {{ background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; }}
-  .macro-pill span {{ color: var(--accent); font-weight: 700; }}
-  .water-pill {{ background: rgba(0,180,255,0.15); border: 1px solid rgba(0,180,255,0.3); border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; }}
-  .meal-card {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem; }}
-  .meal-header {{ display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }}
-  .meal-name {{ font-weight: 700; font-size: 0.95rem; flex: 1; }}
-  .meal-time {{ font-size: 0.78rem; color: var(--muted); }}
-  .meal-kcal {{ font-size: 0.85rem; color: var(--accent); font-weight: 600; margin-left: auto; }}
-  .food-table {{ width: 100%; border-collapse: collapse; font-size: 0.82rem; }}
-  .food-table th {{ text-align: left; color: var(--muted); font-weight: 600; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--border); }}
-  .food-table td {{ padding: 0.3rem 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.05); }}
-  .notes-section {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-top: 1.5rem; }}
-  .notes-title {{ font-size: 0.9rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }}
-  .notes-section ul {{ padding-left: 1.2rem; }}
-  .notes-section li {{ font-size: 0.85rem; color: var(--muted); margin-bottom: 0.35rem; line-height: 1.5; }}
-  .supplement {{ margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); }}
-  .water-note {{ margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted); font-style: italic; }}
-  .summary {{ margin-top: 1rem; font-size: 0.88rem; color: var(--muted); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 0.75rem; }}
-  @media (max-width: 600px) {{
-    .food-table th:nth-child(4), .food-table td:nth-child(4),
-    .food-table th:nth-child(5), .food-table td:nth-child(5),
-    .food-table th:nth-child(6), .food-table td:nth-child(6) {{ display: none; }}
-  }}
-</style>
+{stylesheet}
 </head>
 <body>
 <div class="theme-btns">
-  <button class="theme-btn" onclick="setTheme('')">Original</button>
-  <button class="theme-btn active" onclick="setTheme('dark')">Dark</button>
+  <button class="theme-btn active" onclick="setTheme('original')">Original</button>
+  <button class="theme-btn" onclick="setTheme('dark')">Dark</button>
   <button class="theme-btn" onclick="setTheme('light')">Light</button>
 </div>
 <h1>{title}</h1>
 <p class="objective">{objective_label}</p>
 <p class="description">{description}</p>
 
-<div class="day-section">
-  <p class="day-title">🏋️ Día de Entrenamiento</p>
-  <div class="day-totals">
-    <div class="macro-pill">Calorías: <span>{round(training_day.get('total_calories', 0))} kcal</span></div>
-    <div class="macro-pill">Proteína: <span>{round(training_day.get('total_protein_g', 0))}g</span></div>
-    <div class="macro-pill">HC: <span>{round(training_day.get('total_carbs_g', 0))}g</span></div>
-    <div class="macro-pill">Grasas: <span>{round(training_day.get('total_fat_g', 0))}g</span></div>
-    <div class="water-pill">💧 {training_day.get('water_ml', 0)} ml agua</div>
-  </div>
-  {render_meals(training_day)}
-</div>
+{training_section}
 
-<div class="day-section">
-  <p class="day-title">😴 Día de Descanso</p>
-  <div class="day-totals">
-    <div class="macro-pill">Calorías: <span>{round(rest_day.get('total_calories', 0))} kcal</span></div>
-    <div class="macro-pill">Proteína: <span>{round(rest_day.get('total_protein_g', 0))}g</span></div>
-    <div class="macro-pill">HC: <span>{round(rest_day.get('total_carbs_g', 0))}g</span></div>
-    <div class="macro-pill">Grasas: <span>{round(rest_day.get('total_fat_g', 0))}g</span></div>
-    <div class="water-pill">💧 {rest_day.get('water_ml', 0)} ml agua</div>
-  </div>
-  {render_meals(rest_day)}
-</div>
+{rest_section}
 
-<div class="notes-section">
-  <p class="notes-title">📋 Recomendaciones</p>
-  <ul>{health_notes_html}</ul>
-  {supplement_html}
-  {water_note_html}
-  <p class="summary">{nutritional_summary}</p>
-</div>
+{notes_section}
 
-<script>
-function setTheme(t) {{
-  document.documentElement.setAttribute('data-theme', t);
-  document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-}}
-document.documentElement.setAttribute('data-theme', 'dark');
-</script>
+{scripts}
 </body>
 </html>"""
 
@@ -566,14 +456,248 @@ def _extract_json(raw: str) -> str:
     return text.strip()
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+_WEEKDAY_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def _get_spanish_weekday(d: date_type) -> str:
+    """Return the Spanish name of the weekday for a given date."""
+    return _WEEKDAY_ES[d.weekday()]
+
+
+def _recalculate_meal_totals(meal: dict[str, Any]) -> None:
+    """Recalculate meal macro totals from its food list."""
+    foods = meal.get("foods", [])
+    meal["total_calories"] = round(sum(f.get("calories", 0) for f in foods), 1)
+    meal["total_protein_g"] = round(sum(f.get("protein_g", 0) for f in foods), 1)
+    meal["total_carbs_g"] = round(sum(f.get("carbs_g", 0) for f in foods), 1)
+    meal["total_fat_g"] = round(sum(f.get("fat_g", 0) for f in foods), 1)
+
+
+def _extract_grams_from_portion(portion: str) -> float | None:
+    """Extract a gram (or ml treated as g) weight from a portion string.
+
+    Prefers explicit parenthetical amounts like "(120g)" over bare quantities.
+    Examples:
+      "1 unidad mediana (120g)" → 120.0
+      "80g"                     → 80.0
+      "250ml"                   → 250.0
+      "1 cucharada (15 ml)"     → 15.0
+    """
+    # Prefer parenthetical: (Xg) or (X ml)
+    match = re.search(r'\((\d+(?:[.,]\d+)?)\s*(?:g|gr|ml)\b\)', portion, re.IGNORECASE)
+    if match:
+        return float(match.group(1).replace(",", "."))
+    # Fallback: bare Xg or Xml
+    match = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:g|gr|ml)\b', portion, re.IGNORECASE)
+    if match:
+        return float(match.group(1).replace(",", "."))
+    return None
+
+
+def _enrich_diet_with_fatsecret(diet_data: dict[str, Any]) -> None:
+    """Populate food macros using FatSecret (primary) → USDA (fallback) for each food item.
+
+    Gemini provides food names and portions only — no calorie/macro values.
+    This function resolves per-100g macros from verified nutrition databases,
+    scales them to the actual portion gram weight, and writes the values into
+    each food dict. Unique food names are resolved in parallel via a thread pool.
+    After enrichment, meal and day totals are recalculated from the food values.
+    Foods where both sources fail are left with zero macros (logged as warnings).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from dataclasses import dataclass
+
+    from .fatsecret_service import FatSecretServiceError, search_food_by_name as fatsecret_search
+    from .usda_service import USDAServiceError, search_food_by_name as usda_search
+
+    @dataclass
+    class NutritionResult:
+        calories_per_100g: float
+        protein_per_100g: float
+        carbs_per_100g: float
+        fat_per_100g: float
+        source: str
+
+    # Collect (food_dict, name_lower, grams) for every food with a parsable portion
+    food_items: list[tuple[dict[str, Any], str, float]] = []
+    for day_key in ("training_day", "rest_day"):
+        day = diet_data.get(day_key)
+        if not isinstance(day, dict):
+            continue
+        for meal in day.get("meals") or []:
+            if not isinstance(meal, dict):
+                continue
+            for food in meal.get("foods") or []:
+                if not isinstance(food, dict):
+                    continue
+                grams = _extract_grams_from_portion(food.get("portion", ""))
+                if grams and grams > 0 and food.get("name"):
+                    food_items.append((food, food["name"].lower(), grams))
+
+    if not food_items:
+        return
+
+    # Resolve unique names in parallel — FatSecret first, USDA fallback
+    unique_names: set[str] = {name for _, name, _ in food_items}
+    results: dict[str, NutritionResult] = {}
+
+    def _lookup(name: str) -> tuple[str, NutritionResult | None]:
+        try:
+            r = fatsecret_search(name)
+            return (name, NutritionResult(
+                calories_per_100g=r.calories_per_100g,
+                protein_per_100g=r.protein_per_100g,
+                carbs_per_100g=r.carbs_per_100g,
+                fat_per_100g=r.fat_per_100g,
+                source="fatsecret",
+            ))
+        except (FatSecretServiceError, Exception):
+            pass
+
+        try:
+            r = usda_search(name)
+            return (name, NutritionResult(
+                calories_per_100g=r.calories_per_100g,
+                protein_per_100g=r.protein_per_100g,
+                carbs_per_100g=r.carbs_per_100g,
+                fat_per_100g=r.fat_per_100g,
+                source="usda",
+            ))
+        except (USDAServiceError, Exception):
+            pass
+
+        logger.warning("diet_enrich food=%s: not found in FatSecret or USDA", name)
+        return (name, None)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_lookup, name): name for name in unique_names}
+        for future in as_completed(futures):
+            name, result = future.result()
+            if result is not None:
+                results[name] = result
+                logger.info("diet_enrich food=%s source=%s", name, result.source)
+
+    # Apply resolved macros to each food item
+    for food, name, grams in food_items:
+        result = results.get(name)
+        if result is None:
+            food["calories"] = 0.0
+            food["protein_g"] = 0.0
+            food["carbs_g"] = 0.0
+            food["fat_g"] = 0.0
+            continue
+        factor = grams / 100.0
+        food["calories"] = round(result.calories_per_100g * factor, 1)
+        food["protein_g"] = round(result.protein_per_100g * factor, 1)
+        food["carbs_g"] = round(result.carbs_per_100g * factor, 1)
+        food["fat_g"] = round(result.fat_per_100g * factor, 1)
+
+    # Recalculate meal and day totals from updated food values
+    for day_key in ("training_day", "rest_day"):
+        day = diet_data.get(day_key)
+        if not isinstance(day, dict):
+            continue
+        day_calories = day_protein = day_carbs = day_fat = 0.0
+        for meal in day.get("meals") or []:
+            if not isinstance(meal, dict):
+                continue
+            _recalculate_meal_totals(meal)
+            day_calories += meal.get("total_calories", 0)
+            day_protein += meal.get("total_protein_g", 0)
+            day_carbs += meal.get("total_carbs_g", 0)
+            day_fat += meal.get("total_fat_g", 0)
+        day["total_calories"] = round(day_calories, 1)
+        day["total_protein_g"] = round(day_protein, 1)
+        day["total_carbs_g"] = round(day_carbs, 1)
+        day["total_fat_g"] = round(day_fat, 1)
+
+
 # ── Service ───────────────────────────────────────────────────────────────────
 
-class DietService:
+class DietService(BaseAIGenerationService):
     """Business logic for AI diet plan generation, editing, and retrieval."""
 
     STATUS_PROCESSING = "processing"
     STATUS_READY = "ready"
     STATUS_ERROR = "error"
+
+    # ── BaseAIGenerationService abstract method implementations ───────────────
+
+    @classmethod
+    def _upsert_record(
+        cls, db: Session, *, user_id: int, intake: dict[str, Any]
+    ) -> UserDiet:
+        return cls._upsert_diet(db, user_id=user_id, status=cls.STATUS_PROCESSING, intake_data=intake)
+
+    @classmethod
+    def _get_active_record(cls, db: Session, *, user_id: int) -> UserDiet:
+        return cls.get_active_diet(db, user_id=user_id)
+
+    @classmethod
+    def _get_record_data(cls, record: Any) -> dict[str, Any] | None:
+        return cast(Any, record).diet_data
+
+    @classmethod
+    def _set_record_ready(cls, record: Any, *, raw_data: dict[str, Any], html: str) -> None:
+        d = cast(Any, record)
+        # Persist training_days from intake_data into diet_data for the meal tracker.
+        # intake_data is stored on the record by _upsert_diet during generate_from_text.
+        if "training_days" not in raw_data:
+            intake_data: dict[str, Any] = d.intake_data or {}
+            raw_data["training_days"] = intake_data.get("training_days") or []
+        d.status = cls.STATUS_READY
+        d.html_content = html
+        d.diet_data = raw_data
+        d.error_message = None
+        # Reset meal tracker so it starts fresh with the new diet
+        d.current_meal_index = 0
+        d.current_meal_date = None
+
+    @classmethod
+    def _set_record_error(cls, record: Any, *, error_message: str) -> None:
+        d = cast(Any, record)
+        d.status = cls.STATUS_ERROR
+        d.error_message = error_message
+
+    @classmethod
+    def _set_record_processing(cls, record: Any) -> None:
+        cast(Any, record).status = cls.STATUS_PROCESSING
+
+    @classmethod
+    def _build_generation_prompt(
+        cls,
+        intake: dict[str, Any],
+        free_text: str,
+        user_bio: dict[str, Any],
+        **kwargs: Any,
+    ) -> str:
+        routine_data: dict[str, Any] | None = kwargs.get("routine_data")
+        return _build_diet_generation_prompt(intake, free_text, user_bio, routine_data)
+
+    @classmethod
+    def _build_edit_prompt(cls, current_data: dict[str, Any], edit_instruction: str) -> str:
+        return _build_diet_edit_prompt(current_data, edit_instruction)
+
+    @classmethod
+    def _call_gemini_and_parse(cls, prompt: str) -> dict[str, Any]:
+        return cls._call_gemini(prompt)
+
+    @classmethod
+    def _generate_html(cls, raw_data: dict[str, Any]) -> str:
+        return _generate_diet_html(raw_data)
+
+    @classmethod
+    def _post_process(cls, raw_data: dict[str, Any], **kwargs: Any) -> None:
+        # Replace AI-estimated macros with verified FatSecret data
+        _enrich_diet_with_fatsecret(raw_data)
+
+    @classmethod
+    def _get_no_data_exception(cls) -> Exception:
+        return DietParsingError("No diet data available to edit.")
+
+    # ── Public API ────────────────────────────────────────────────────────────
 
     @classmethod
     def generate_from_text(
@@ -587,33 +711,14 @@ class DietService:
         routine_data: dict[str, Any] | None = None,
     ) -> UserDiet:
         """Generate a personalized diet plan from intake form + free text via Gemini."""
-        diet = cls._upsert_diet(
+        return super().generate_from_text(
             db,
             user_id=user_id,
-            status=cls.STATUS_PROCESSING,
-            intake_data=intake,
-        )
-        db.commit()
-
-        try:
-            prompt = _build_diet_generation_prompt(intake, free_text, user_bio, routine_data)
-            raw_data = cls._call_gemini(prompt)
-            html = _generate_diet_html(raw_data)
-
-            d = cast(Any, diet)
-            d.status = cls.STATUS_READY
-            d.html_content = html
-            d.diet_data = raw_data
-            d.error_message = None
-        except Exception as exc:
-            logger.exception("Failed to generate diet for user_id=%s", user_id)
-            d = cast(Any, diet)
-            d.status = cls.STATUS_ERROR
-            d.error_message = str(exc)
-
-        db.commit()
-        db.refresh(diet)
-        return diet
+            intake=intake,
+            free_text=free_text,
+            user_bio=user_bio,
+            routine_data=routine_data,
+        )  # type: ignore[return-value]
 
     @classmethod
     def edit_diet(
@@ -624,33 +729,7 @@ class DietService:
         edit_instruction: str,
     ) -> UserDiet:
         """Apply an edit instruction to the user's current diet via Gemini."""
-        diet = cls.get_active_diet(db, user_id=user_id)
-
-        current_data = cast(Any, diet).diet_data
-        if not current_data:
-            raise DietParsingError("No diet data available to edit.")
-
-        d = cast(Any, diet)
-        d.status = cls.STATUS_PROCESSING
-        db.commit()
-
-        try:
-            prompt = _build_diet_edit_prompt(current_data, edit_instruction)
-            raw_data = cls._call_gemini(prompt)
-            html = _generate_diet_html(raw_data)
-
-            d.status = cls.STATUS_READY
-            d.html_content = html
-            d.diet_data = raw_data
-            d.error_message = None
-        except Exception as exc:
-            logger.exception("Failed to edit diet for user_id=%s", user_id)
-            d.status = cls.STATUS_ERROR
-            d.error_message = str(exc)
-
-        db.commit()
-        db.refresh(diet)
-        return diet
+        return cls.edit_record(db, user_id=user_id, edit_instruction=edit_instruction)  # type: ignore[return-value]
 
     @classmethod
     def get_active_diet(cls, db: Session, *, user_id: int) -> UserDiet:
@@ -658,6 +737,306 @@ class DietService:
         diet = db.query(UserDiet).filter(UserDiet.user_id == user_id).first()
         if diet is None:
             raise DietNotFoundError("No active diet plan found.")
+        return diet
+
+    @classmethod
+    def get_current_meal(cls, db: Session, *, user_id: int) -> dict[str, Any]:
+        """Return the current planned meal based on today's day type and tracker index."""
+        diet = cls.get_active_diet(db, user_id=user_id)
+        d = cast(Any, diet)
+
+        if d.status != "ready":
+            raise DietNotFoundError("No active diet plan found.")
+
+        diet_data: dict[str, Any] = d.diet_data or {}
+        today = date_type.today()
+        today_str = today.isoformat()
+
+        # Auto-reset index if date has changed
+        if d.current_meal_date != today:
+            d.current_meal_index = 0
+            d.current_meal_date = today
+            db.commit()
+
+        training_days: list[str] = [t.lower() for t in (diet_data.get("training_days") or [])]
+        is_training = _get_spanish_weekday(today) in training_days
+        day_key = "training_day" if is_training else "rest_day"
+        day_data = diet_data.get(day_key) or diet_data.get("rest_day") or {}
+        meals: list[dict[str, Any]] = day_data.get("meals") or []
+        total_meals = len(meals)
+
+        meal_index = min(int(d.current_meal_index or 0), max(total_meals - 1, 0))
+        planned_meal = meals[meal_index] if meals else None
+
+        # Check for a daily override (set via apply_meal_alternative with scope='today')
+        daily_overrides: dict[str, Any] = d.daily_overrides or {}
+        today_overrides: dict[str, Any] = daily_overrides.get(today_str) or {}
+        override = today_overrides.get(str(meal_index))
+        is_overridden = override is not None
+        current_meal = override if is_overridden else planned_meal
+
+        return {
+            "day_type": day_key,
+            "meal": current_meal,
+            "meal_index": meal_index,
+            "total_meals": total_meals,
+            "is_last_meal": meal_index >= total_meals - 1,
+            "is_overridden": is_overridden,
+        }
+
+    @classmethod
+    def log_meal(cls, db: Session, *, user_id: int, action: str) -> dict[str, Any]:
+        """Mark the current meal as complete or skipped, advancing the tracker index.
+
+        When action is 'complete', the meal's macros are added to today's daily_consumed tally.
+        """
+        diet = cls.get_active_diet(db, user_id=user_id)
+        d = cast(Any, diet)
+
+        today = date_type.today()
+        today_str = today.isoformat()
+
+        if d.current_meal_date != today:
+            d.current_meal_index = 0
+            d.current_meal_date = today
+
+        diet_data: dict[str, Any] = d.diet_data or {}
+        training_days: list[str] = [t.lower() for t in (diet_data.get("training_days") or [])]
+        is_training = _get_spanish_weekday(today) in training_days
+        day_key = "training_day" if is_training else "rest_day"
+        day_data = diet_data.get(day_key) or diet_data.get("rest_day") or {}
+        meals: list[dict[str, Any]] = day_data.get("meals") or []
+        total_meals = len(meals)
+
+        current_index = int(d.current_meal_index or 0)
+
+        # Accumulate consumed macros only when the user marks the meal as complete
+        if action == "complete" and current_index < total_meals:
+            # Resolve the meal (may be a daily override)
+            daily_overrides: dict[str, Any] = d.daily_overrides or {}
+            today_overrides: dict[str, Any] = daily_overrides.get(today_str) or {}
+            meal = today_overrides.get(str(current_index)) or (meals[current_index] if meals else None)
+
+            if meal:
+                meal_calories  = float(meal.get("total_calories",  0))
+                meal_protein_g = float(meal.get("total_protein_g", 0))
+                meal_carbs_g   = float(meal.get("total_carbs_g",   0))
+                meal_fat_g     = float(meal.get("total_fat_g",     0))
+
+                # ── Update diet-level daily_consumed tracker ──────────────
+                consumed: dict[str, Any] = copy.deepcopy(d.daily_consumed or {})
+                day_entry: dict[str, float] = consumed.get(today_str) or {
+                    "calories": 0.0, "protein_g": 0.0, "carbs_g": 0.0, "fat_g": 0.0
+                }
+                day_entry["calories"]  = round(day_entry["calories"]  + meal_calories,  1)
+                day_entry["protein_g"] = round(day_entry["protein_g"] + meal_protein_g, 1)
+                day_entry["carbs_g"]   = round(day_entry["carbs_g"]   + meal_carbs_g,   1)
+                day_entry["fat_g"]     = round(day_entry["fat_g"]      + meal_fat_g,    1)
+                consumed[today_str] = day_entry
+                d.daily_consumed = consumed
+                flag_modified(d, "daily_consumed")
+
+                # ── Also write into DailyNutrition so the dashboard reflects it ──
+                # Local import avoids circular dependency (nutrition_service → diet_service)
+                from .nutrition_service import NutritionService  # noqa: PLC0415
+                daily = NutritionService.get_or_create_daily_nutrition(db, user_id=user_id)
+                daily.total_calories   += meal_calories
+                daily.protein_consumed += meal_protein_g
+                daily.carbs_consumed   += meal_carbs_g
+                daily.fat_consumed     += meal_fat_g
+
+        next_index = min(current_index + 1, total_meals)  # clamp — don't wrap daily
+        d.current_meal_index = next_index
+        d.current_meal_date = today
+        db.commit()
+
+        return {
+            "current_meal_index": next_index,
+            "current_meal_date": today_str,
+            "advanced": next_index > current_index,
+        }
+
+    @classmethod
+    def get_meal_alternative(cls, db: Session, *, user_id: int) -> dict[str, Any]:
+        """Generate an AI alternative for the current planned meal via Gemini.
+
+        Returns a meal with the same calorie target (±20 kcal) and macros (±5 g each),
+        respecting the user's food preferences stored in intake_data.
+        """
+        diet = cls.get_active_diet(db, user_id=user_id)
+        d = cast(Any, diet)
+        if d.status != "ready":
+            raise DietNotFoundError("No active diet plan found.")
+
+        # Get current meal info (reuses existing day-type + index resolution)
+        current = cls.get_current_meal(db, user_id=user_id)
+        meal: dict[str, Any] | None = current.get("meal")
+        if not meal:
+            raise DietNotFoundError("No hay comida planificada en este momento.")
+
+        meal_index: int = current["meal_index"]
+        day_type: str = current["day_type"]
+
+        intake: dict[str, Any] = d.intake_data or {}
+        restrictions = intake.get("dietary_restrictions") or "ninguna"
+        allergies = intake.get("food_allergies") or "ninguna"
+        disliked = intake.get("disliked_foods") or "ninguno"
+        budget = intake.get("budget_level") or "moderado"
+        cooking = intake.get("cooking_time") or "moderado"
+        free_text = intake.get("free_text") or ""
+
+        cal   = float(meal.get("total_calories",  0))
+        prot  = float(meal.get("total_protein_g", 0))
+        carbs = float(meal.get("total_carbs_g",   0))
+        fat   = float(meal.get("total_fat_g",     0))
+
+        foods_summary = ", ".join(
+            f"{f.get('portion', '')} {f.get('name', '')}".strip()
+            for f in (meal.get("foods") or [])
+        )
+
+        free_text_section = f"\nINFORMACIÓN ADICIONAL: {free_text.strip()}" if free_text.strip() else ""
+
+        prompt = f"""Genera una comida alternativa para reemplazar "{meal.get('name', 'esta comida')}" de un plan de dieta personalizado.
+
+COMIDA ACTUAL: {meal.get('name')}
+ALIMENTOS ACTUALES: {foods_summary}
+CALORÍAS OBJETIVO: {cal:.0f} kcal (rango aceptable: {cal - 20:.0f}–{cal + 20:.0f} kcal)
+PROTEÍNAS: {prot:.0f}g (rango: {prot - 5:.0f}–{prot + 5:.0f}g)
+CARBOHIDRATOS: {carbs:.0f}g (rango: {carbs - 5:.0f}–{carbs + 5:.0f}g)
+GRASAS: {fat:.0f}g (rango: {fat - 5:.0f}–{fat + 5:.0f}g)
+
+PREFERENCIAS DEL USUARIO:
+- Restricciones dietéticas: {restrictions}
+- Alergias: {allergies}
+- Alimentos que NO le gustan: {disliked}
+- Presupuesto: {budget}
+- Tiempo de cocción: {cooking}{free_text_section}
+
+INSTRUCCIONES:
+- La alternativa debe ser DIFERENTE a la comida actual (distintos alimentos)
+- Respetar estrictamente las restricciones, alergias y alimentos que no le gustan
+- Priorizar alimentos que el usuario mencionó que le gustan
+- Los totales deben estar dentro de los rangos indicados
+
+Devuelve SOLO JSON válido — sin markdown, sin código, sin explicaciones:
+{{
+  "id": "meal_alt",
+  "name": "Nombre de la comida en español",
+  "foods": [
+    {{
+      "name": "nombre del alimento",
+      "portion": "cantidad y unidad (ej: 150g, 1 unidad)",
+      "calories": 0.0,
+      "protein_g": 0.0,
+      "carbs_g": 0.0,
+      "fat_g": 0.0,
+      "notes": ""
+    }}
+  ],
+  "total_calories": 0.0,
+  "total_protein_g": 0.0,
+  "total_carbs_g": 0.0,
+  "total_fat_g": 0.0,
+  "notes": ""
+}}"""
+
+        alternative_data = cls._call_gemini_light(prompt)
+
+        return {
+            "meal": alternative_data,
+            "day_type": day_type,
+            "meal_index": meal_index,
+        }
+
+    @classmethod
+    def apply_meal_alternative(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        meal_index: int,
+        day_type: str,
+        scope: str,
+        meal: dict[str, Any],
+    ) -> None:
+        """Apply an alternative meal either permanently or as a 24 h daily override.
+
+        scope='diet'  → replaces the meal in diet_data permanently.
+        scope='today' → stores in daily_overrides[today][meal_index]; expires at midnight.
+        """
+        diet = cls.get_active_diet(db, user_id=user_id)
+        d = cast(Any, diet)
+        if d.status != "ready":
+            raise DietNotFoundError("No active diet plan found.")
+
+        today_str = date_type.today().isoformat()
+
+        if scope == "today":
+            overrides: dict[str, Any] = copy.deepcopy(d.daily_overrides or {})
+            day_overrides = overrides.get(today_str) or {}
+            day_overrides[str(meal_index)] = meal
+            overrides[today_str] = day_overrides
+            d.daily_overrides = overrides
+            flag_modified(d, "daily_overrides")
+
+        else:  # scope == "diet" — permanent replacement
+            diet_data: dict[str, Any] = copy.deepcopy(d.diet_data or {})
+            day_data: dict[str, Any] = diet_data.get(day_type) or {}
+            meals: list[dict[str, Any]] = day_data.get("meals") or []
+            if 0 <= meal_index < len(meals):
+                meals[meal_index] = meal
+                day_data["meals"] = meals
+                diet_data[day_type] = day_data
+                d.diet_data = diet_data
+                flag_modified(d, "diet_data")
+            else:
+                raise DietParsingError(f"meal_index {meal_index} out of range.")
+
+        db.commit()
+
+    @classmethod
+    def modify_meal(
+        cls,
+        db: Session,
+        *,
+        user_id: int,
+        day_type: str,
+        meal_id: str,
+        action: str,
+        food: dict[str, Any] | None = None,
+        food_index: int | None = None,
+    ) -> UserDiet:
+        """Add or remove a food item from a specific meal."""
+        diet = cls.get_active_diet(db, user_id=user_id)
+        d = cast(Any, diet)
+
+        if not d.diet_data:
+            raise DietParsingError("No diet data to modify.")
+
+        diet_data: dict[str, Any] = copy.deepcopy(d.diet_data)
+        day = diet_data.get(day_type)
+        if not day:
+            raise DietParsingError(f"Day type '{day_type}' not found in diet.")
+
+        meals: list[dict[str, Any]] = day.get("meals") or []
+        meal = next((m for m in meals if m.get("id") == meal_id), None)
+        if meal is None:
+            raise DietParsingError(f"Meal '{meal_id}' not found in {day_type}.")
+
+        if action == "add_food" and food is not None:
+            meal.setdefault("foods", []).append(food)
+            _recalculate_meal_totals(meal)
+        elif action == "remove_food" and food_index is not None:
+            foods = meal.get("foods", [])
+            if 0 <= food_index < len(foods):
+                foods.pop(food_index)
+                _recalculate_meal_totals(meal)
+
+        # Reassign to trigger SQLAlchemy dirty tracking on JSON column
+        d.diet_data = diet_data
+        db.commit()
+        db.refresh(diet)
         return diet
 
     # ── Internal helpers ──────────────────────────────────────────────────────
@@ -689,6 +1068,40 @@ class DietService:
         return diet
 
     @classmethod
+    def _call_gemini_light(cls, prompt: str) -> dict[str, Any]:
+        """Lightweight Gemini call for single-meal generation (lower token limit, higher temperature)."""
+        if not settings.GEMINI_API_KEY:
+            raise DietParsingError("Gemini API key not configured.")
+
+        model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+        url = f"{GEMINI_API_BASE_URL}/{model}:generateContent?key={settings.GEMINI_API_KEY}"
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": DietConstants.GEMINI_ALTERNATIVE_MAX_OUTPUT_TOKENS,
+                "thinkingConfig": {"thinkingBudget": 0},
+            },
+        }
+
+        with httpx.Client(timeout=DietConstants.GEMINI_ALTERNATIVE_TIMEOUT_SECONDS) as client:
+            response = client.post(url, json=payload)
+            response.raise_for_status()
+
+        candidates = response.json().get("candidates", [])
+        if not candidates:
+            raise DietParsingError("Gemini returned no candidates.")
+
+        raw_text = candidates[0]["content"]["parts"][0]["text"].strip()
+        cleaned = _extract_json(raw_text)
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise DietParsingError(f"Failed to parse Gemini alternative response: {exc}") from exc
+
+    @classmethod
     def _call_gemini(cls, prompt: str) -> dict[str, Any]:
         """Send a text-only request to Gemini and parse the JSON response."""
         if not settings.GEMINI_API_KEY:
@@ -701,11 +1114,12 @@ class DietService:
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.4,
-                "maxOutputTokens": 65536,
+                "maxOutputTokens": DietConstants.GEMINI_MAX_OUTPUT_TOKENS,
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
 
-        with httpx.Client(timeout=120.0) as client:
+        with httpx.Client(timeout=DietConstants.GEMINI_TIMEOUT_SECONDS) as client:
             response = client.post(url, json=payload)
             response.raise_for_status()
 

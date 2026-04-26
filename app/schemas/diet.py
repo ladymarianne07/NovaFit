@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from datetime import date as date_type
+
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Intake form ───────────────────────────────────────────────────────────────
@@ -42,9 +44,9 @@ class DietIntakeData(BaseModel):
         default="moderado",
         description="'mínimo (platos rápidos)' | 'moderado (30-45 min)' | 'sin límite'",
     )
-    meal_timing_preference: str = Field(
-        default="",
-        description="Preferred meal times or schedule (e.g., 'desayuno a las 7, almuerzo a las 13').",
+    training_days: list[str] = Field(
+        default_factory=list,
+        description="Days of the week the user trains (e.g. ['lunes','miércoles','viernes']). Empty = single-day plan.",
     )
 
 
@@ -91,7 +93,6 @@ class DietMeal(BaseModel):
 
     id: str
     name: str
-    time: str = ""
     foods: list[DietFood]
     total_calories: float
     total_protein_g: float
@@ -126,5 +127,70 @@ class UserDietResponse(BaseModel):
     diet_data: dict[str, Any] | None = None
     intake_data: dict[str, Any] | None = None
     error_message: str | None = None
+    current_meal_index: int = 0
+    current_meal_date: str | None = None
+    daily_consumed: dict[str, Any] | None = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("current_meal_date", mode="before")
+    @classmethod
+    def coerce_date_to_str(cls, v: Any) -> str | None:
+        """SQLAlchemy Date columns return datetime.date — coerce to ISO string."""
+        if isinstance(v, date_type):
+            return v.isoformat()
+        return v
+
+
+# ── Meal tracker ──────────────────────────────────────────────────────────────
+
+class DietLogMealRequest(BaseModel):
+    """Mark the current planned meal as complete or skipped, advancing the tracker index."""
+
+    action: Literal["complete", "skip"] = Field(..., description="'complete' | 'skip'")
+
+
+class DietLogMealResponse(BaseModel):
+    """Result after logging a meal action."""
+
+    current_meal_index: int
+    current_meal_date: str | None = None
+    advanced: bool
+
+
+class DietModifyMealRequest(BaseModel):
+    """Add or remove a food item from a specific meal."""
+
+    day_type: str = Field(..., description="'training_day' | 'rest_day'")
+    meal_id: str = Field(..., description="Meal id from diet_data (e.g. 'breakfast')")
+    action: Literal["add_food", "remove_food"] = Field(..., description="'add_food' | 'remove_food'")
+    food: DietFood | None = None        # Required for add_food
+    food_index: int | None = None       # Required for remove_food
+
+
+class CurrentMealResponse(BaseModel):
+    """The current planned meal based on today's day type and tracker index."""
+
+    day_type: str  # 'training_day' | 'rest_day'
+    meal: dict[str, Any] | None = None
+    meal_index: int
+    total_meals: int
+    is_last_meal: bool
+    is_overridden: bool = False
+
+
+class MealAlternativeResponse(BaseModel):
+    """An AI-generated alternative meal for the current planned meal."""
+
+    meal: DietMeal
+    day_type: str
+    meal_index: int
+
+
+class ApplyAlternativeRequest(BaseModel):
+    """Apply a meal alternative — either permanently to the diet or just for today (24 h)."""
+
+    meal_index: int
+    day_type: str = Field(..., description="'training_day' | 'rest_day'")
+    scope: str = Field(..., description="'diet' (permanent) | 'today' (24 h override)")
+    meal: DietMeal

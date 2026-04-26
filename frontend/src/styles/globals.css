@@ -1528,7 +1528,8 @@
 .dashboard-slide-panel {
   flex: 0 0 100%;
   min-width: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
   contain: paint;
   backface-visibility: hidden;
@@ -9334,13 +9335,90 @@
   line-height: 1.5;
 }
 
-.diet-ai-creator {
+/* ── Training days picker ── */
+.diet-days-grid {
   display: flex;
-  flex-direction: column;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.diet-day-chip {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diet-day-chip.active {
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #0a1a1e;
+}
+
+.diet-day-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.routine-intake-hint {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+}
+
+.diet-suggested-days-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  overflow-y: auto;
-  max-height: calc(100vh - 160px);
-  padding-bottom: 0.5rem;
+  background: rgba(var(--theme-accent-rgb, 0, 242, 195), 0.08);
+  border: 1px solid rgba(var(--theme-accent-rgb, 0, 242, 195), 0.2);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.5rem;
+}
+
+.diet-suggested-days-apply {
+  background: var(--theme-accent);
+  color: #0a1a1e;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Light mode overrides */
+[data-theme="light"] .diet-day-chip {
+  border-color: rgba(10, 26, 30, 0.2);
+  background: rgba(10, 26, 30, 0.05);
+  color: rgba(10, 26, 30, 0.7);
+}
+
+[data-theme="light"] .routine-intake-hint {
+  color: rgba(10, 26, 30, 0.45);
+}
+
+[data-theme="light"] .diet-suggested-days-banner {
+  background: rgba(0, 138, 150, 0.08);
+  border-color: rgba(0, 138, 150, 0.2);
+  color: rgba(10, 26, 30, 0.7);
 }
 
 /* ── Light mode overrides ────────────────────────────────────────── */
@@ -9412,4 +9490,400 @@
 [data-theme="light"] .diet-food-notes,
 [data-theme="light"] .diet-profile-note {
   color: rgba(10, 26, 30, 0.5);
+}
+
+/* ── Meal tracker card ── */
+.meal-tracker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.meal-tracker-card.meal-tracker-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  gap: 0.5rem;
+  opacity: 0.6;
+}
+
+.meal-tracker-empty-icon {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.meal-tracker-empty-text {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.meal-tracker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.meal-tracker-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.meal-tracker-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--theme-accent);
+  background: rgba(0, 242, 195, 0.1);
+  border: 1px solid rgba(0, 242, 195, 0.2);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+
+.meal-tracker-progress {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 99px;
+  padding: 0.1rem 0.5rem;
+}
+
+.meal-tracker-time {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.meal-tracker-name-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.meal-tracker-meal-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  margin: 0;
+}
+
+.meal-tracker-total-kcal {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.meal-tracker-ingredients {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.meal-tracker-macros {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.meal-tracker-macro-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.meal-tracker-macro-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.meal-tracker-macro-pill.calories {
+  background: rgba(236, 72, 153, 0.12);
+  border-color: rgba(236, 72, 153, 0.25);
+  color: rgba(236, 72, 153, 0.9);
+}
+
+.meal-tracker-macro-pill.calories::before { background: #f07070; }
+
+.meal-tracker-macro-pill.protein {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.25);
+  color: rgba(139, 92, 246, 0.9);
+}
+
+.meal-tracker-macro-pill.protein::before { background: #a78bfa; }
+
+.meal-tracker-macro-pill.carbs {
+  background: rgba(0, 242, 195, 0.1);
+  border-color: rgba(0, 242, 195, 0.2);
+  color: rgba(0, 242, 195, 0.85);
+}
+
+.meal-tracker-macro-pill.carbs::before { background: var(--theme-accent); }
+
+.meal-tracker-macro-pill.fat {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.2);
+  color: rgba(255, 193, 7, 0.85);
+}
+
+.meal-tracker-macro-pill.fat::before { background: #ffd060; }
+
+.meal-tracker-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.meal-tracker-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.meal-tracker-btn:active {
+  transform: scale(0.97);
+}
+
+.meal-tracker-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.meal-tracker-btn.complete {
+  flex: 1;
+  background: var(--theme-accent);
+  color: #0a1a1e;
+  justify-content: center;
+}
+
+.meal-tracker-btn.skip {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.meal-tracker-done {
+  font-size: 0.85rem;
+  color: var(--theme-accent);
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.nutrition-free-meal-btn {
+  background: linear-gradient(90deg, #a855f7, #ff4fa3) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* ── Meal tracker — Alternativa button ── */
+.meal-tracker-btn.alternative {
+  background: rgba(168, 85, 247, 0.12);
+  color: rgba(192, 132, 252, 0.9);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  gap: 0.3rem;
+  padding: 0.55rem 0.8rem;
+  min-width: 90px;
+  justify-content: center;
+}
+
+.meal-tracker-btn.alternative:hover {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+/* ── Logged meals list ── */
+.logged-meals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.logged-meal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+}
+
+.logged-meal-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 5px;
+}
+
+.logged-meal-badge.breakfast {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  color: rgba(251, 191, 36, 0.9);
+}
+
+.logged-meal-badge.lunch {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: rgba(52, 211, 153, 0.9);
+}
+
+.logged-meal-badge.dinner {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: rgba(129, 140, 248, 0.9);
+}
+
+.logged-meal-badge.snack,
+.logged-meal-badge.meal {
+  background: rgba(0, 242, 195, 0.1);
+  border: 1px solid rgba(0, 242, 195, 0.2);
+  color: rgba(0, 242, 195, 0.85);
+}
+
+/* ── Alternative meal modal ── */
+.alternative-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1100;
+  padding: 0 0 env(safe-area-inset-bottom, 0);
+}
+
+@media (min-width: 540px) {
+  .alternative-modal-overlay {
+    align-items: center;
+  }
+}
+
+.alternative-modal-dialog {
+  background: var(--bg-card, #1a1d2e);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 0 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+@media (min-width: 540px) {
+  .alternative-modal-dialog {
+    border-radius: 20px;
+  }
+}
+
+.alternative-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.alternative-modal-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.alternative-modal-body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.alternative-modal-notes {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+  margin: 0;
+}
+
+.alternative-modal-actions {
+  padding: 0.5rem 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Light mode overrides — logged meals + alternative modal */
+[data-theme="light"] .logged-meal-badge.breakfast { background: rgba(217, 119, 6, 0.1); border-color: rgba(217, 119, 6, 0.3); color: #b45309; }
+[data-theme="light"] .logged-meal-badge.lunch { background: rgba(5, 150, 105, 0.1); border-color: rgba(5, 150, 105, 0.3); color: #047857; }
+[data-theme="light"] .logged-meal-badge.dinner { background: rgba(79, 70, 229, 0.1); border-color: rgba(79, 70, 229, 0.3); color: #4338ca; }
+[data-theme="light"] .logged-meal-badge.snack,
+[data-theme="light"] .logged-meal-badge.meal { background: rgba(0, 180, 160, 0.1); border-color: rgba(0, 180, 160, 0.3); color: #0d9488; }
+
+[data-theme="light"] .alternative-modal-dialog {
+  background: #f8fafc;
+  border-color: rgba(10, 26, 30, 0.12);
+}
+
+[data-theme="light"] .alternative-modal-title { color: rgba(10, 26, 30, 0.85); }
+[data-theme="light"] .alternative-modal-notes { color: rgba(10, 26, 30, 0.5); }
+[data-theme="light"] .alternative-modal-header { border-bottom-color: rgba(10, 26, 30, 0.08); }
+[data-theme="light"] .meal-tracker-btn.alternative {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: rgba(168, 85, 247, 0.2);
+  color: #7c3aed;
+}
+
+/* Light mode overrides for meal tracker */
+[data-theme="light"] .meal-tracker-empty-icon {
+  color: rgba(10, 26, 30, 0.3);
+}
+
+[data-theme="light"] .meal-tracker-empty-text {
+  color: rgba(10, 26, 30, 0.45);
+}
+
+[data-theme="light"] .meal-tracker-meal-name {
+  color: rgba(10, 26, 30, 0.9);
+}
+
+[data-theme="light"] .meal-tracker-total-kcal {
+  color: rgba(10, 26, 30, 0.5);
+}
+
+[data-theme="light"] .meal-tracker-ingredients {
+  color: rgba(10, 26, 30, 0.6);
+}
+
+[data-theme="light"] .meal-tracker-progress {
+  background: rgba(10, 26, 30, 0.06);
+  color: rgba(10, 26, 30, 0.4);
+}
+
+[data-theme="light"] .meal-tracker-btn.skip {
+  background: rgba(10, 26, 30, 0.06);
+  color: rgba(10, 26, 30, 0.6);
+  border-color: rgba(10, 26, 30, 0.12);
 }

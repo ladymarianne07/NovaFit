@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Brain, ChevronLeft, ChevronRight, Clock3, Mic, MicOff, Salad, Sparkles, Trash2 } from 'lucide-react'
-import { foodAPI, nutritionAPI, MealGroupResponse, FoodParseLogResponse, ConfirmMealsRequest } from '../services/api'
+import { Brain, Check, Clock3, Mic, MicOff, RefreshCw, Salad, SkipForward, Sparkles, Trash2, UtensilsCrossed, X } from 'lucide-react'
+import { foodAPI, nutritionAPI, dietAPI, MealGroupResponse, FoodParseLogResponse, ConfirmMealsRequest, CurrentMealResponse, MealAlternativeResponse, DietMeal, getApiError } from '../services/api'
 import AiMealConfirmModal from './AiMealConfirmModal'
 import DietModule from './DietModule'
 
@@ -264,12 +264,21 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
   const [deletingMealId, setDeletingMealId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [mealsError, setMealsError] = useState('')
-  const [activeMealIndex, setActiveMealIndex] = useState(0)
   const [isListening, setIsListening] = useState(false)
   const [voiceErrorMessage, setVoiceErrorMessage] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const isStoppingRecognitionRef = useRef(false)
-  const mealTouchStartXRef = useRef<number | null>(null)
+
+  // Meal tracker state
+  const [currentMeal, setCurrentMeal] = useState<CurrentMealResponse | null>(null)
+  const [isMealTrackerLoading, setIsMealTrackerLoading] = useState(false)
+  const [isLoggingMeal, setIsLoggingMeal] = useState(false)
+  const [mealTrackerNoDiet, setMealTrackerNoDiet] = useState(false)
+
+  // Alternative meal state
+  const [isLoadingAlternative, setIsLoadingAlternative] = useState(false)
+  const [alternativeData, setAlternativeData] = useState<MealAlternativeResponse | null>(null)
+  const [isApplyingAlternative, setIsApplyingAlternative] = useState(false)
 
   const isVoiceInputSupported = useMemo(() => getSpeechRecognitionConstructor() !== null, [])
 
@@ -286,9 +295,67 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
     }
   }, [])
 
+  const fetchCurrentMeal = useCallback(async () => {
+    setIsMealTrackerLoading(true)
+    setMealTrackerNoDiet(false)
+    try {
+      const data = await dietAPI.getCurrentMeal()
+      setCurrentMeal(data)
+      setMealTrackerNoDiet(false)
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 404) {
+        setCurrentMeal(null)
+        setMealTrackerNoDiet(true)
+      }
+    } finally {
+      setIsMealTrackerLoading(false)
+    }
+  }, [])
+
+  const handleLogMeal = async (action: 'complete' | 'skip') => {
+    setIsLoggingMeal(true)
+    try {
+      await dietAPI.logMeal({ action })
+      await fetchCurrentMeal()
+    } finally {
+      setIsLoggingMeal(false)
+    }
+  }
+
+  const handleGetAlternative = async () => {
+    setIsLoadingAlternative(true)
+    try {
+      const data = await dietAPI.getMealAlternative()
+      setAlternativeData(data)
+    } catch {
+      // silently ignore — user sees no modal
+    } finally {
+      setIsLoadingAlternative(false)
+    }
+  }
+
+  const handleApplyAlternative = async (scope: 'diet' | 'today') => {
+    if (!alternativeData) return
+    setIsApplyingAlternative(true)
+    try {
+      await dietAPI.applyMealAlternative({
+        meal_index: alternativeData.meal_index,
+        day_type: alternativeData.day_type,
+        scope,
+        meal: alternativeData.meal,
+      })
+      setAlternativeData(null)
+      await fetchCurrentMeal()
+    } finally {
+      setIsApplyingAlternative(false)
+    }
+  }
+
   useEffect(() => {
     fetchMeals()
-  }, [fetchMeals])
+    fetchCurrentMeal()
+  }, [fetchMeals, fetchCurrentMeal])
 
   useEffect(() => {
     const handler = () => {
@@ -305,16 +372,6 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       ),
     [meals]
   )
-
-  useEffect(() => {
-    setActiveMealIndex((currentIndex) => {
-      if (todayMeals.length === 0) {
-        return 0
-      }
-
-      return Math.min(currentIndex, todayMeals.length - 1)
-    })
-  }, [todayMeals.length])
 
   useEffect(
     () => () => {
@@ -421,18 +478,18 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
       const parsed = await foodAPI.parsePreview({ text: content })
       setPreviewData(parsed)
       setIsConfirmModalOpen(true)
-    } catch (error: any) {
-      const backendError = error?.response?.data
+    } catch (err: unknown) {
+      const backendError = getApiError(err)
 
-      if (backendError?.error === 'insufficient_data') {
+      if (backendError.error === 'insufficient_data') {
         setErrorMessage('No pude interpretar la cantidad. Probá con más detalle o una porción.')
-      } else if (backendError?.error === 'invalid_domain') {
+      } else if (backendError.error === 'invalid_domain') {
         setErrorMessage('Ese texto no parece una comida. Ingresá un alimento o plato.')
-      } else if (backendError?.detail === 'gemini_quota_exceeded') {
+      } else if (backendError.detail === 'gemini_quota_exceeded') {
         setErrorMessage('Se alcanzó el límite diario de uso de IA. Probá nuevamente más tarde o con otra API key/proyecto.')
-      } else if (backendError?.detail === 'missing_gemini_api_key') {
+      } else if (backendError.detail === 'missing_gemini_api_key') {
         setErrorMessage('Falta configurar GEMINI_API_KEY en el backend.')
-      } else if (backendError?.detail === 'missing_usda_api_key') {
+      } else if (backendError.detail === 'USDA API key is not configured') {
         setErrorMessage('Falta configurar USDA_API_KEY en el backend.')
       } else {
         setErrorMessage('No se pudo calcular la comida ahora. Intentá nuevamente.')
@@ -472,30 +529,6 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
 
   const formatMacro = (value: number) => Math.round(value)
 
-  const handleMealsTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    mealTouchStartXRef.current = event.touches[0]?.clientX ?? null
-  }
-
-  const handleMealsTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (mealTouchStartXRef.current === null) return
-
-    const endX = event.changedTouches[0]?.clientX ?? mealTouchStartXRef.current
-    const deltaX = endX - mealTouchStartXRef.current
-    const swipeThreshold = 45
-
-    if (Math.abs(deltaX) < swipeThreshold) {
-      mealTouchStartXRef.current = null
-      return
-    }
-
-    if (deltaX < 0) {
-      setActiveMealIndex((current) => Math.min(current + 1, todayMeals.length - 1))
-    } else {
-      setActiveMealIndex((current) => Math.max(current - 1, 0))
-    }
-
-    mealTouchStartXRef.current = null
-  }
 
   return (
     <section className={`nutrition-module ${className}`.trim()} aria-label="Módulo de alimentación">
@@ -526,13 +559,96 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
         <DietModule />
       ) : (
         <>
+          {/* ── Planned meal tracker ── */}
+          {isMealTrackerLoading ? (
+            <article className="nutrition-card meal-tracker-card" aria-label="Próxima comida planificada">
+              <div className="nutrition-empty-state">
+                <div className="neon-loader neon-loader--sm" aria-hidden="true" />
+              </div>
+            </article>
+          ) : mealTrackerNoDiet ? (
+            <article className="nutrition-card meal-tracker-card meal-tracker-empty" aria-label="Sin dieta">
+              <UtensilsCrossed size={28} className="meal-tracker-empty-icon" />
+              <p className="meal-tracker-empty-text">Generá tu dieta para activar el seguimiento de comidas</p>
+            </article>
+          ) : currentMeal && currentMeal.total_meals > 0 ? (
+            <article className="nutrition-card meal-tracker-card" aria-label="Próxima comida planificada">
+              <div className="meal-tracker-header">
+                <div className="meal-tracker-title-group">
+                  <span className="meal-tracker-label">Próxima comida</span>
+                  <span className="meal-tracker-progress">
+                    {currentMeal.meal_index + 1} / {currentMeal.total_meals}
+                  </span>
+                </div>
+              </div>
+
+              {currentMeal.meal ? (
+                <>
+                  <div className="meal-tracker-name-row">
+                    <h4 className="meal-tracker-meal-name">{currentMeal.meal.name}</h4>
+                    <span className="meal-tracker-total-kcal">{Math.round(currentMeal.meal.total_calories)} kcal</span>
+                  </div>
+
+                  <p className="meal-tracker-ingredients">
+                    {(currentMeal.meal.foods ?? []).map(f => `${f.portion} ${f.name}`).join(' · ')}
+                  </p>
+
+                  <div className="meal-tracker-macros">
+                    <span className="meal-tracker-macro-pill calories">{Math.round(currentMeal.meal.total_calories)} kcal</span>
+                    <span className="meal-tracker-macro-pill protein">P: {Math.round(currentMeal.meal.total_protein_g)}g</span>
+                    <span className="meal-tracker-macro-pill carbs">Carbos: {Math.round(currentMeal.meal.total_carbs_g)}g</span>
+                    <span className="meal-tracker-macro-pill fat">G: {Math.round(currentMeal.meal.total_fat_g)}g</span>
+                  </div>
+
+                  <div className="meal-tracker-actions">
+                    <button
+                      type="button"
+                      className="meal-tracker-btn complete"
+                      onClick={() => handleLogMeal('complete')}
+                      disabled={isLoggingMeal || isLoadingAlternative}
+                      aria-label="Marcar comida como completada"
+                    >
+                      <Check size={16} />
+                      {isLoggingMeal ? 'Guardando...' : 'Completé esta comida'}
+                    </button>
+                    <button
+                      type="button"
+                      className="meal-tracker-btn skip"
+                      onClick={() => handleLogMeal('skip')}
+                      disabled={isLoggingMeal || isLoadingAlternative}
+                      aria-label="Saltear esta comida"
+                    >
+                      <SkipForward size={16} />
+                      Saltear
+                    </button>
+                    <button
+                      type="button"
+                      className="meal-tracker-btn alternative"
+                      onClick={handleGetAlternative}
+                      disabled={isLoggingMeal || isLoadingAlternative}
+                      aria-label="Obtener comida alternativa"
+                    >
+                      {isLoadingAlternative
+                        ? <div className="neon-loader neon-loader--sm" aria-hidden="true" />
+                        : <RefreshCw size={14} />
+                      }
+                      {isLoadingAlternative ? '' : 'Alternativa'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="meal-tracker-done">¡Todas las comidas del día completadas!</p>
+              )}
+            </article>
+          ) : null}
+
       <div className="nutrition-top-action">
         <button
           type="button"
-          className="nutrition-primary-button"
+          className={`nutrition-primary-button${isAiComposerOpen ? '' : ' nutrition-free-meal-btn'}`}
           onClick={() => setIsAiComposerOpen((current) => !current)}
         >
-          <Brain size={16} /> {isAiComposerOpen ? 'Cerrar ingreso IA' : 'Ingresar comida por IA'}
+          <Brain size={16} /> {isAiComposerOpen ? 'Cerrar ingreso IA' : 'Registrar comida libre'}
         </button>
       </div>
 
@@ -617,7 +733,7 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
         {isLoadingMeals ? (
           <div className="nutrition-empty-state">
             <div className="loading-stack">
-              <div className="neon-loader neon-loader--sm" aria-hidden="true"></div>
+              <div className="neon-loader neon-loader--sm" aria-hidden="true" />
               <p>Cargando comidas...</p>
             </div>
           </div>
@@ -626,121 +742,129 @@ const NutritionModule: React.FC<NutritionModuleProps> = ({ className = '' }) => 
             <p>Hoy todavía no cargaste comidas.</p>
           </div>
         ) : (
-          <div className="nutrition-meals-slider">
-            <div className="nutrition-slider-controls">
-              <button
-                type="button"
-                className="nutrition-slider-nav"
-                onClick={() => setActiveMealIndex((current) => Math.max(current - 1, 0))}
-                disabled={activeMealIndex === 0}
-                aria-label="Ver comida anterior"
-              >
-                <ChevronLeft size={16} />
-              </button>
+          <div className="logged-meals-list">
+            {todayMeals.map((meal, index) => {
+              const normalizedMealType = normalizeMealType(meal.meal_type ?? 'meal')
+              const itemsSummary = meal.items.map((item) => translateFoodName(item.food_name)).join(' · ')
+              const mealDisplayLabel = getDisplayMealLabel(meal, index)
 
-              <p className="nutrition-slider-indicator">
-                Comida {activeMealIndex + 1} de {todayMeals.length}
-              </p>
+              return (
+                <article key={meal.id} className="nutrition-card logged-meal-card">
+                  <div className="meal-tracker-header">
+                    <div className="meal-tracker-title-group">
+                      <span className={`logged-meal-badge ${normalizedMealType}`}>
+                        {MEAL_TYPE_LABELS[normalizedMealType]}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="nutrition-meal-delete"
+                      onClick={() => handleDeleteMeal(meal.id)}
+                      disabled={deletingMealId === meal.id}
+                      aria-label="Eliminar comida"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
 
-              <button
-                type="button"
-                className="nutrition-slider-nav"
-                onClick={() => setActiveMealIndex((current) => Math.min(current + 1, todayMeals.length - 1))}
-                disabled={activeMealIndex === todayMeals.length - 1}
-                aria-label="Ver siguiente comida"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
+                  <div className="meal-tracker-name-row">
+                    <h4 className="meal-tracker-meal-name">{mealDisplayLabel}</h4>
+                    <span className="meal-tracker-total-kcal">{meal.total_calories.toFixed(0)} kcal</span>
+                  </div>
 
-            <div
-              className="nutrition-slider-window"
-              aria-live="polite"
-              onTouchStart={handleMealsTouchStart}
-              onTouchEnd={handleMealsTouchEnd}
-            >
-              <div
-                className="nutrition-slider-track"
-                style={{ transform: `translate3d(-${activeMealIndex * 100}%, 0, 0)` }}
-              >
-                {todayMeals.map((meal, index) => {
-                  const normalizedMealType = normalizeMealType(meal.meal_type ?? 'meal')
-                  const itemsSummary = meal.items.map((item) => translateFoodName(item.food_name)).join(', ')
-                  const mealDisplayLabel = getDisplayMealLabel(meal, index)
+                  <p className="meal-tracker-ingredients">{itemsSummary}</p>
 
-                  return (
-                    <article key={meal.id} className="nutrition-meal-item">
-                      <div className="nutrition-meal-top">
-                        <div className="nutrition-meal-title-group">
-                          <p className="nutrition-meal-name">{mealDisplayLabel}</p>
-                          <span className={`nutrition-meal-type-badge ${normalizedMealType}`}>
-                            {MEAL_TYPE_LABELS[normalizedMealType]}
-                          </span>
-                        </div>
-
-                        <div className="nutrition-meal-actions">
-                          <span className="nutrition-meal-time">
-                            {new Date(meal.event_timestamp).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </span>
-                          <button
-                            type="button"
-                            className="nutrition-meal-delete"
-                            onClick={() => handleDeleteMeal(meal.id)}
-                            disabled={deletingMealId === meal.id}
-                            aria-label="Eliminar comida"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="nutrition-meal-items-line">
-                        <strong>Alimentos:</strong> {itemsSummary}
-                      </p>
-
-                      <div className="nutrition-meal-macro-grid">
-                        <div className="nutrition-macro-pill calories">
-                          <span className="nutrition-macro-label">Calorías</span>
-                          <span className="nutrition-macro-value">{meal.total_calories.toFixed(0)} kcal</span>
-                        </div>
-                        <div className="nutrition-macro-pill carbs">
-                          <span className="nutrition-macro-label">Carbohidratos</span>
-                          <span className="nutrition-macro-value">{formatMacro(meal.total_carbs)} g</span>
-                        </div>
-                        <div className="nutrition-macro-pill protein">
-                          <span className="nutrition-macro-label">Proteínas</span>
-                          <span className="nutrition-macro-value">{formatMacro(meal.total_protein)} g</span>
-                        </div>
-                        <div className="nutrition-macro-pill fat">
-                          <span className="nutrition-macro-label">Grasas</span>
-                          <span className="nutrition-macro-value">{formatMacro(meal.total_fat)} g</span>
-                        </div>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="nutrition-slider-dots" role="tablist" aria-label="Selector de comidas">
-              {todayMeals.map((meal, index) => (
-                <button
-                  key={meal.id}
-                  type="button"
-                  className={`nutrition-slider-dot ${index === activeMealIndex ? 'active' : ''}`}
-                  onClick={() => setActiveMealIndex(index)}
-                  aria-label={`Ir a comida ${index + 1}`}
-                  aria-current={index === activeMealIndex}
-                />
-              ))}
-            </div>
+                  <div className="meal-tracker-macros">
+                    <span className="meal-tracker-macro-pill calories">{meal.total_calories.toFixed(0)} kcal</span>
+                    <span className="meal-tracker-macro-pill protein">P: {formatMacro(meal.total_protein)}g</span>
+                    <span className="meal-tracker-macro-pill carbs">Carbos: {formatMacro(meal.total_carbs)}g</span>
+                    <span className="meal-tracker-macro-pill fat">G: {formatMacro(meal.total_fat)}g</span>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </article>
         </>
+      )}
+
+      {/* ══════════ MODAL ALTERNATIVA ══════════ */}
+      {alternativeData && (
+        <div
+          className="alternative-modal-overlay"
+          onClick={() => setAlternativeData(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Comida alternativa"
+        >
+          <div
+            className="alternative-modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="alternative-modal-header">
+              <span className="alternative-modal-title">Alternativa sugerida</span>
+              <button
+                type="button"
+                className="routine-missing-close"
+                onClick={() => setAlternativeData(null)}
+                aria-label="Cerrar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="alternative-modal-body">
+              <div className="meal-tracker-name-row">
+                <h4 className="meal-tracker-meal-name">{alternativeData.meal.name}</h4>
+                <span className="meal-tracker-total-kcal">{Math.round(alternativeData.meal.total_calories)} kcal</span>
+              </div>
+
+              <p className="meal-tracker-ingredients">
+                {(alternativeData.meal.foods ?? []).map(f => `${f.portion} ${f.name}`).join(' · ')}
+              </p>
+
+              <div className="meal-tracker-macros">
+                <span className="meal-tracker-macro-pill calories">{Math.round(alternativeData.meal.total_calories)} kcal</span>
+                <span className="meal-tracker-macro-pill protein">P: {Math.round(alternativeData.meal.total_protein_g)}g</span>
+                <span className="meal-tracker-macro-pill carbs">Carbos: {Math.round(alternativeData.meal.total_carbs_g)}g</span>
+                <span className="meal-tracker-macro-pill fat">G: {Math.round(alternativeData.meal.total_fat_g)}g</span>
+              </div>
+
+              {alternativeData.meal.notes && (
+                <p className="alternative-modal-notes">{alternativeData.meal.notes}</p>
+              )}
+            </div>
+
+            <div className="alternative-modal-actions">
+              <button
+                type="button"
+                className="routine-primary-btn"
+                onClick={() => handleApplyAlternative('diet')}
+                disabled={isApplyingAlternative}
+              >
+                {isApplyingAlternative ? <div className="neon-loader neon-loader--sm" aria-hidden="true" /> : null}
+                Reemplazar en mi dieta
+              </button>
+              <button
+                type="button"
+                className="routine-secondary-btn"
+                onClick={() => handleApplyAlternative('today')}
+                disabled={isApplyingAlternative}
+              >
+                Solo por hoy (24 hs)
+              </button>
+              <button
+                type="button"
+                className="routine-secondary-btn"
+                onClick={() => setAlternativeData(null)}
+                disabled={isApplyingAlternative}
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <AiMealConfirmModal

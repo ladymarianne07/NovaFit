@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.db.database import get_database_session
 from app.db.models import Base
+from app.db.workout_seed import seed_exercise_activities
 
 
 # Create test database
@@ -28,6 +29,8 @@ app.dependency_overrides[get_database_session] = override_get_db
 @pytest.fixture
 def client():
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        seed_exercise_activities(conn)
     with TestClient(app) as c:
         yield c
     Base.metadata.drop_all(bind=engine)

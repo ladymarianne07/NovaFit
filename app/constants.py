@@ -300,6 +300,11 @@ class RoutineConstants:
     # Gemini timeout (larger files need more time)
     GEMINI_TIMEOUT_SECONDS = 60.0
 
+    # Gemini generation limits — realistic cap for a full routine plan (JSON + HTML).
+    # 65536 was the previous value and triggered extended thinking in Gemini 2.5 Flash,
+    # inflating response times to 27-30 s. 12000 covers even 3-month, 5-day/week plans.
+    GEMINI_MAX_OUTPUT_TOKENS = 12000
+
     # Source types
     SOURCE_FILE = "file"
     SOURCE_AI_TEXT = "ai_text"
@@ -325,3 +330,28 @@ class RoutineConstants:
     EQUIPMENT_DUMBBELLS = "mancuernas en casa"
     EQUIPMENT_BANDS = "bandas elásticas"
     EQUIPMENT_BODYWEIGHT = "peso corporal"
+
+
+class DietConstants:
+    """Constants for the AI-powered diet plan generation and editing module."""
+
+    # Diet status lifecycle
+    STATUS_PROCESSING = "processing"
+    STATUS_READY = "ready"
+    STATUS_ERROR = "error"
+
+    # Source types
+    SOURCE_AI_TEXT = "ai_text"
+
+    # Gemini timeouts
+    GEMINI_TIMEOUT_SECONDS = 120.0
+    GEMINI_ALTERNATIVE_TIMEOUT_SECONDS = 60.0
+
+    # Gemini generation limits — realistic cap for a full diet plan (JSON + HTML).
+    # 65536 was the previous value and triggered extended thinking in Gemini 2.5 Flash,
+    # inflating response times to 27-30 s. 10000 covers training + rest day plans
+    # with up to 8 meals each.
+    GEMINI_MAX_OUTPUT_TOKENS = 10000
+
+    # Alternative meal generation uses a smaller cap — single meal only.
+    GEMINI_ALTERNATIVE_MAX_OUTPUT_TOKENS = 4096

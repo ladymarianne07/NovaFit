@@ -103,9 +103,9 @@ const RoutineLogModal: React.FC<RoutineLogModalProps> = ({ isOpen, sessions, onC
 
   const activeSession = sessions.find((s) => s.id === selectedSessionId) ?? null
 
-  // ── Calorie preview — mirrors backend logic exactly ──
-  // Base: AI estimate × (done / total). Extras: MET × 70kg placeholder × hours.
-  // The 70kg placeholder is shown to user as approximate — backend uses real weight.
+  // ── Calorie preview — MET-based estimate (mirrors backend logic) ──
+  // Base: fuerza_general MET (5.0) × 70 kg placeholder × session duration, scaled for skips.
+  // Extras: their own MET × 70 kg × hours. Backend recalculates with real weight on submit.
 
   const previewCalories = (): number => {
     if (!activeSession) return 0
@@ -113,7 +113,8 @@ const RoutineLogModal: React.FC<RoutineLogModalProps> = ({ isOpen, sessions, onC
     const n = exercises.length
     const done = n - exercises.filter((ex) => skippedIds.has(ex.id)).length
     const scale = n > 0 ? done / n : 1
-    const base = Math.round(activeSession.estimated_calories_per_session * scale)
+    const durationMinutes = activeSession.session_duration_minutes ?? 60
+    const base = Math.round(5.0 * 70 * (durationMinutes / 60) * scale)
 
     const extraKcal = extras.reduce((acc, row) => {
       const opt = EXTRA_TYPE_OPTIONS.find((o) => o.value === row.exercise_type)
@@ -284,15 +285,6 @@ const RoutineLogModal: React.FC<RoutineLogModalProps> = ({ isOpen, sessions, onC
                           className="routine-log-checkbox"
                         />
                         <span className="routine-log-exercise-name">{ex.name}</span>
-                        <span className="routine-log-exercise-cal">
-                          {skipped ? (
-                            <span className="routine-log-cal-skipped">
-                              −{Math.round(ex.estimated_calories)} kcal
-                            </span>
-                          ) : (
-                            <span>{Math.round(ex.estimated_calories)} kcal</span>
-                          )}
-                        </span>
                       </label>
                     )
                   })}

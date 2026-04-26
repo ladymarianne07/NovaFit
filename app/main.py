@@ -35,15 +35,130 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+_OPENAPI_TAGS = [
+    {
+        "name": "authentication",
+        "description": "Register, login and logout. Returns a **Bearer JWT** that must be sent in `Authorization` header for all protected routes.",
+    },
+    {
+        "name": "users",
+        "description": (
+            "User profile, biometrics and fitness configuration. "
+            "Updating biometrics automatically recalculates BMR/TDEE. "
+            "Setting an objective automatically calculates macro targets."
+        ),
+    },
+    {
+        "name": "nutrition",
+        "description": "Daily macronutrient tracking — consumed vs. targets. Also exposes the free-text meal logging endpoint.",
+    },
+    {
+        "name": "diet",
+        "description": (
+            "AI-powered personalized diet plan generation and editing (Google Gemini). "
+            "Includes meal tracker (complete/skip), daily macro accumulation, "
+            "24-hour meal overrides and AI-generated meal alternatives."
+        ),
+    },
+    {
+        "name": "routines",
+        "description": (
+            "Workout routine management. Upload a PDF/image/text file or generate from an intake form — "
+            "Gemini parses the content, extracts sessions and exercises, "
+            "estimates calories and generates an HTML plan. "
+            "Includes session progression tracker."
+        ),
+    },
+    {
+        "name": "workout",
+        "description": (
+            "Manual workout session logging with MET-based calorie estimation. "
+            "Each session can contain multiple exercise blocks. "
+            "Daily energy aggregation is available per date."
+        ),
+    },
+    {
+        "name": "food",
+        "description": (
+            "Free-text food parsing via Gemini AI → USDA/FatSecret calorie lookup. "
+            "Also supports multi-source food search (USDA, FatSecret, OpenFoodFacts)."
+        ),
+    },
+    {
+        "name": "trainer",
+        "description": (
+            "Trainer-only endpoints. Trainers can invite students via a 7-day code, "
+            "view their full profiles, and remotely update biometrics, objectives and nutrition targets. "
+            "All changes notify the trainer."
+        ),
+    },
+    {
+        "name": "invite",
+        "description": "Accept a trainer's invite code to link the student account to the trainer.",
+    },
+    {
+        "name": "events",
+        "description": "Append-only activity timeline. Events are never truly deleted (soft-delete only).",
+    },
+    {
+        "name": "notifications",
+        "description": "In-app notifications (invite accepted, biometric updates, etc.).",
+    },
+]
+
+_OPENAPI_DESCRIPTION = """
+## NovaFitness API
+
+Fitness tracking and AI-powered nutrition/routine planning backend.
+
+### Key features
+
+| Module | Description |
+|---|---|
+| **Auth** | JWT-based authentication (PBKDF2-SHA256 passwords) |
+| **Diet** | AI diet plan generation + meal tracker (Gemini) |
+| **Routines** | PDF/image routine parsing + AI generation (Gemini) |
+| **Nutrition** | Daily macro tracking (consumed vs. targets) |
+| **Workout** | MET-based calorie estimation per session |
+| **Food** | Free-text → calories via USDA / FatSecret / OpenFoodFacts |
+| **Trainer** | Student management, invite codes, remote profile editing |
+
+### Authentication
+
+Send the JWT token as a Bearer header:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Tokens are valid for **1 year** by default.
+
+### External integrations
+
+- **Google Gemini** — food parsing, routine/diet generation & editing, meal alternatives
+- **USDA FoodData Central** — per-100g macro lookup
+- **FatSecret** — branded food search (OAuth2)
+- **OpenFoodFacts** — barcode-based product lookup
+"""
+
+
 def create_application() -> FastAPI:
-    """
-    Application factory pattern for better testability and configuration
-    """
+    """Application factory pattern for better testability and configuration."""
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.VERSION,
-        description="Private pilot fitness tracking API",
-        debug=settings.DEBUG
+        description=_OPENAPI_DESCRIPTION,
+        openapi_tags=_OPENAPI_TAGS,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        debug=settings.DEBUG,
+        contact={
+            "name": "NovaFitness",
+            "email": "soporte@novafitness.app",
+        },
+        license_info={
+            "name": "Proprietary",
+        },
     )
     
     # Initialize database tables
@@ -78,14 +193,49 @@ def setup_middleware(app: FastAPI) -> None:
     )
 
 
+# ── Exception handler factory ─────────────────────────────────────────────────
+
+# Table of (exception_class, http_status, error_code) for handlers that all
+# return the same shape: {"detail": exc.message, "error_code": <literal>}.
+_SIMPLE_ERROR_HANDLERS: list[tuple[type, int, str]] = [
+    (PasswordValidationError,   StatusCodes.UNPROCESSABLE_ENTITY, "PASSWORD_VALIDATION_ERROR"),
+    (EmailValidationError,      StatusCodes.UNPROCESSABLE_ENTITY, "EMAIL_VALIDATION_ERROR"),
+    (NameValidationError,       StatusCodes.UNPROCESSABLE_ENTITY, "NAME_VALIDATION_ERROR"),
+    (UserAlreadyExistsError,    StatusCodes.CONFLICT,             "USER_ALREADY_EXISTS"),
+    (InvalidCredentialsError,   StatusCodes.UNAUTHORIZED,         "INVALID_CREDENTIALS"),
+    (ValidationError,           StatusCodes.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR"),
+    (BiometricCalculationError, StatusCodes.INTERNAL_SERVER_ERROR,"BIOMETRIC_CALCULATION_ERROR"),
+    (TrainerOnlyError,          StatusCodes.FORBIDDEN,            "TRAINER_ONLY"),
+    (InviteNotFoundError,       StatusCodes.NOT_FOUND,            "INVITE_NOT_FOUND"),
+    (InviteAlreadyUsedError,    StatusCodes.CONFLICT,             "INVITE_ALREADY_USED"),
+    (InviteExpiredError,        410,                              "INVITE_EXPIRED"),
+    (StudentAlreadyLinkedError, StatusCodes.CONFLICT,             "STUDENT_ALREADY_LINKED"),
+    (StudentNotLinkedError,     StatusCodes.NOT_FOUND,            "STUDENT_NOT_LINKED"),
+]
+
+
+def _create_simple_error_handler(status_code: int, error_code: str):
+    """Return an async handler that replies {detail, error_code} at the given status."""
+    async def handler(request: Request, exc: NovaFitnessException) -> JSONResponse:
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": exc.message, "error_code": error_code},
+        )
+    return handler
+
+
 def setup_exception_handlers(app: FastAPI) -> None:
     """Setup global exception handlers"""
-    
-    # FastAPI default validation error handler (handles Pydantic validation errors)
+
+    # Register all simple {detail, error_code} handlers from the table above
+    for exc_class, status_code, error_code in _SIMPLE_ERROR_HANDLERS:
+        app.add_exception_handler(exc_class, _create_simple_error_handler(status_code, error_code))
+
+    # ── Custom handlers (unique response shapes) ──────────────────────────────
+
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle FastAPI request validation errors (Pydantic validation failures)"""
-        # Extract the first error message for user-friendly display  
         if exc.errors():
             first_error = exc.errors()[0]
             field_name = " -> ".join([str(loc) for loc in first_error["loc"][1:]])  # Skip 'body'
@@ -93,194 +243,45 @@ def setup_exception_handlers(app: FastAPI) -> None:
             detail = f"{field_name}: {error_msg}" if field_name else error_msg
         else:
             detail = "Invalid input data"
-        
         return JSONResponse(
             status_code=422,
-            content={
-                "detail": detail,
-                "error_code": "VALIDATION_ERROR"
-            }
+            content={"detail": detail, "error_code": "VALIDATION_ERROR"},
         )
-    
-    # Validation error handlers (most specific first)
-    @app.exception_handler(PasswordValidationError)
-    async def password_validation_exception_handler(request: Request, exc: PasswordValidationError):
-        """Handle password validation errors"""
-        return JSONResponse(
-            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": exc.message,
-                "error_code": "PASSWORD_VALIDATION_ERROR"
-            }
-        )
-    
-    @app.exception_handler(EmailValidationError)
-    async def email_validation_exception_handler(request: Request, exc: EmailValidationError):
-        """Handle email validation errors"""
-        return JSONResponse(
-            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": exc.message,
-                "error_code": "EMAIL_VALIDATION_ERROR"
-            }
-        )
-    
-    @app.exception_handler(NameValidationError)
-    async def name_validation_exception_handler(request: Request, exc: NameValidationError):
-        """Handle name validation errors"""
-        return JSONResponse(
-            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": exc.message,
-                "error_code": "NAME_VALIDATION_ERROR"
-            }
-        )
-    
+
     @app.exception_handler(InputValidationError)
     async def input_validation_exception_handler(request: Request, exc: InputValidationError):
-        """Handle input validation errors"""
         return JSONResponse(
             status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": exc.message,
-                "field": exc.field,
-                "error_code": "INPUT_VALIDATION_ERROR"
-            }
+            content={"detail": exc.message, "field": exc.field, "error_code": "INPUT_VALIDATION_ERROR"},
         )
-    
-    @app.exception_handler(UserAlreadyExistsError)
-    async def user_already_exists_exception_handler(request: Request, exc: UserAlreadyExistsError):
-        """Handle user already exists errors"""
-        return JSONResponse(
-            status_code=StatusCodes.CONFLICT,
-            content={
-                "detail": exc.message,
-                "error_code": "USER_ALREADY_EXISTS"
-            }
-        )
-    
-    @app.exception_handler(InvalidCredentialsError)
-    async def invalid_credentials_exception_handler(request: Request, exc: InvalidCredentialsError):
-        """Handle invalid credentials errors"""
-        return JSONResponse(
-            status_code=StatusCodes.UNAUTHORIZED,
-            content={
-                "detail": exc.message,
-                "error_code": "INVALID_CREDENTIALS"
-            }
-        )
-    
-    # General validation error handler
-    @app.exception_handler(ValidationError)
-    async def validation_exception_handler(request: Request, exc: ValidationError):
-        """Handle general validation errors"""
-        return JSONResponse(
-            status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": exc.message,
-                "error_code": "VALIDATION_ERROR"
-            }
-        )
-    
+
     @app.exception_handler(BiometricValidationError)
     async def biometric_validation_exception_handler(request: Request, exc: BiometricValidationError):
-        """Handle biometric validation errors with detailed field information"""
         return JSONResponse(
             status_code=StatusCodes.UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Biometric validation failed",
-                "errors": exc.errors,
-                "error_code": "BIOMETRIC_VALIDATION_ERROR"
-            }
+            content={"detail": "Biometric validation failed", "errors": exc.errors, "error_code": "BIOMETRIC_VALIDATION_ERROR"},
         )
-    
+
     @app.exception_handler(IncompleteBiometricDataError)
     async def incomplete_biometric_data_exception_handler(request: Request, exc: IncompleteBiometricDataError):
-        """Handle incomplete biometric data errors"""
         return JSONResponse(
             status_code=StatusCodes.BAD_REQUEST,
-            content={
-                "detail": exc.message,
-                "missing_fields": exc.missing_fields,
-                "error_code": "INCOMPLETE_BIOMETRIC_DATA"
-            }
-        )
-    
-    @app.exception_handler(BiometricCalculationError)
-    async def biometric_calculation_exception_handler(request: Request, exc: BiometricCalculationError):
-        """Handle biometric calculation errors"""
-        return JSONResponse(
-            status_code=StatusCodes.INTERNAL_SERVER_ERROR,
-            content={
-                "detail": exc.message,
-                "error_code": "BIOMETRIC_CALCULATION_ERROR"
-            }
-        )
-    
-    @app.exception_handler(TrainerOnlyError)
-    async def trainer_only_exception_handler(request: Request, exc: TrainerOnlyError):
-        """Handle trainer-only access violations"""
-        return JSONResponse(
-            status_code=StatusCodes.FORBIDDEN,
-            content={"detail": exc.message, "error_code": "TRAINER_ONLY"}
-        )
-
-    @app.exception_handler(InviteNotFoundError)
-    async def invite_not_found_exception_handler(request: Request, exc: InviteNotFoundError):
-        return JSONResponse(
-            status_code=StatusCodes.NOT_FOUND,
-            content={"detail": exc.message, "error_code": "INVITE_NOT_FOUND"}
-        )
-
-    @app.exception_handler(InviteAlreadyUsedError)
-    async def invite_already_used_exception_handler(request: Request, exc: InviteAlreadyUsedError):
-        return JSONResponse(
-            status_code=StatusCodes.CONFLICT,
-            content={"detail": exc.message, "error_code": "INVITE_ALREADY_USED"}
-        )
-
-    @app.exception_handler(InviteExpiredError)
-    async def invite_expired_exception_handler(request: Request, exc: InviteExpiredError):
-        return JSONResponse(
-            status_code=410,
-            content={"detail": exc.message, "error_code": "INVITE_EXPIRED"}
-        )
-
-    @app.exception_handler(StudentAlreadyLinkedError)
-    async def student_already_linked_exception_handler(request: Request, exc: StudentAlreadyLinkedError):
-        return JSONResponse(
-            status_code=StatusCodes.CONFLICT,
-            content={"detail": exc.message, "error_code": "STUDENT_ALREADY_LINKED"}
-        )
-
-    @app.exception_handler(StudentNotLinkedError)
-    async def student_not_linked_exception_handler(request: Request, exc: StudentNotLinkedError):
-        return JSONResponse(
-            status_code=StatusCodes.NOT_FOUND,
-            content={"detail": exc.message, "error_code": "STUDENT_NOT_LINKED"}
+            content={"detail": exc.message, "missing_fields": exc.missing_fields, "error_code": "INCOMPLETE_BIOMETRIC_DATA"},
         )
 
     @app.exception_handler(NovaFitnessException)
     async def nova_fitness_exception_handler(request: Request, exc: NovaFitnessException):
-        """Handle custom NovaFitness exceptions"""
         return JSONResponse(
             status_code=StatusCodes.BAD_REQUEST,
-            content={
-                "detail": exc.message,
-                "error_code": exc.error_code
-            }
+            content={"detail": exc.message, "error_code": exc.error_code},
         )
-    
+
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
-        """Handle unexpected exceptions"""
         logger.error(f"Unexpected error: {exc}", exc_info=True)
         return JSONResponse(
             status_code=StatusCodes.INTERNAL_SERVER_ERROR,
-            content={
-                "detail": "An unexpected error occurred",
-                "error_code": "INTERNAL_SERVER_ERROR"
-            }
+            content={"detail": "An unexpected error occurred", "error_code": "INTERNAL_SERVER_ERROR"},
         )
 
 
@@ -293,14 +294,10 @@ def setup_routes(app: FastAPI) -> None:
     app.include_router(workout.router)
     app.include_router(routine.router)
     app.include_router(diet.router)
-    app.include_router(workout.router, prefix="/api")
-    app.include_router(routine.router, prefix="/api")
-    app.include_router(diet.router, prefix="/api")
     app.include_router(trainer.router)
     app.include_router(notifications.router)
     app.include_router(invite.router)
     app.include_router(food.router)
-    app.include_router(food.router, prefix="/api")
     
     @app.get("/")
     async def root():

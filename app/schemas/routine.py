@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,15 +13,11 @@ from pydantic import BaseModel, Field
 class RoutineIntakeData(BaseModel):
     """Health and preference data collected before generating an AI routine."""
 
-    objective: str = Field(
-        ...,
-        description="'fat_loss' | 'body_recomp' | 'muscle_gain'",
-    )
     duration_months: int = Field(
         ...,
         ge=1,
-        le=12,
-        description="How many months the routine should last",
+        le=3,
+        description="How many months the routine should last (1–3)",
     )
     health_conditions: str = Field(
         ...,
@@ -92,7 +88,6 @@ class RoutineExercise(BaseModel):
     name: str
     muscle: str
     group: str
-    estimated_calories: float
 
 
 class RoutineSession(BaseModel):
@@ -104,7 +99,7 @@ class RoutineSession(BaseModel):
     day_label: str = ""
     title: str
     color: str = "#c8f55a"
-    estimated_calories_per_session: float
+    session_duration_minutes: int = 60
     exercises: list[RoutineExercise]
 
 
@@ -141,7 +136,16 @@ class UserRoutineResponse(BaseModel):
 class RoutineAdvanceSessionRequest(BaseModel):
     """Request to advance the routine to the next session (complete or skip)."""
 
-    action: str = Field(..., description="'complete' | 'skip'")
+    action: Literal["complete", "skip"] = Field(..., description="'complete' | 'skip'")
+
+
+class AdvanceSessionResponse(BaseModel):
+    """Lightweight response after advancing a routine session."""
+
+    action: str
+    current_session_index: int
+    next_session_title: str | None = None
+    kcal_burned: float | None = None
 
 
 # ── Session log ───────────────────────────────────────────────────────────────

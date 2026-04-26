@@ -393,6 +393,16 @@ class UserDiet(Base):
 
     error_message = Column(Text, nullable=True)
 
+    # Meal tracker state (resets daily — like current_session_index on UserRoutine)
+    current_meal_index = Column(Integer, nullable=False, default=0)
+    current_meal_date = Column(Date, nullable=True)  # NULL = never tracked yet
+
+    # Daily macro tracking — {"2026-04-02": {"calories": 304.0, "protein_g": 20.0, "carbs_g": 37.0, "fat_g": 9.0}}
+    daily_consumed = Column(JSON, nullable=True)
+
+    # Per-day meal overrides (expires automatically at midnight) — {"2026-04-02": {"0": {...meal_dict}}}
+    daily_overrides = Column(JSON, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

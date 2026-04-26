@@ -388,12 +388,28 @@ async def get_new_feature_service(db: AsyncSession = Depends(get_db)) -> NewFeat
 ```
 
 #### 8. Register Router
+
+⚠️ **Dual-path registration required for `/v1/` routers (production compatibility)**
+
+The Vite dev server proxies `/api/*` → `http://localhost:8000/*`, stripping the `/api` prefix. This proxy is **not active in production builds** — the frontend hits the backend directly with `/api/...` URLs.
+
+**Rule:** If your router uses a `/v1/` path prefix, register it **twice** in `main.py`: once as-is (for dev via proxy) and once with `prefix="/api"` (for production without proxy).
+
 ```python
 # main.py
 from app.api import new_feature
 
+# Routers without /v1/ prefix — single registration is fine
 app.include_router(new_feature.router, prefix="/new-features", tags=["new-features"])
+
+# Routers WITH /v1/ prefix — must be registered twice
+app.include_router(new_feature.router)              # dev (Vite proxy strips /api)
+app.include_router(new_feature.router, prefix="/api")  # production (no proxy)
 ```
+
+Current routers that require dual registration: `routine.router`, `workout.router`.
+
+If you add a new router with a `/v1/` prefix (e.g. `APIRouter(prefix="/v1/my-feature")`), add both `include_router` calls or the feature will 404 in production.
 
 ## ⚡ Performance Guidelines
 
@@ -523,6 +539,46 @@ When creating migrations:
 4. Update all API code that references the column
 5. Test locally with the new schema
 6. Deploy migration + code changes together (atomic)
+
+---
+
+### 3. Adding New Columns — Automatic Migration System ⚠️
+
+NovaFitness uses a **custom auto-migration system** in `app/db/database.py` that runs on every backend startup. This means **you never need to run manual SQL on Render** when adding a column.
+
+#### How it works
+
+On startup, `create_tables()` calls `ensure_schema_compatibility()`, which:
+1. Inspects the live database
+2. Compares existing columns against `REQUIRED_USER_COLUMNS` and `REQUIRED_ROUTINE_COLUMNS`
+3. Issues `ALTER TABLE ... ADD COLUMN` for any missing columns automatically
+
+This works for both **SQLite** (local dev) and **PostgreSQL** (Render production).
+
+#### Checklist when adding a new column
+
+**Step 1** — Add the column to the SQLAlchemy model in `app/db/models.py`:
+```python
+current_session_index = Column(Integer, nullable=False, default=0)
+```
+
+**Step 2** — Register it in the appropriate dict in `app/db/database.py`:
+```python
+REQUIRED_ROUTINE_COLUMNS: dict[str, str] = {
+    ...
+    "current_session_index": "INTEGER DEFAULT 0",  # ← add this
+}
+```
+Use the dict that corresponds to the table:
+- `REQUIRED_USER_COLUMNS` → `users` table
+- `REQUIRED_ROUTINE_COLUMNS` → `user_routines` table
+
+**Step 3** — Deploy. The column is created automatically on the next restart.
+
+#### ❌ Do NOT
+- Run manual `ALTER TABLE` SQL on Render — the system handles it
+- Add `DEFAULT NULL` to the column type string — the dict value already defines the default
+- Skip Step 2 — without it, the column won't be created in existing databases
 
 ---
 

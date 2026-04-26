@@ -2,6 +2,35 @@ import axios from 'axios'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
+// Standard backend error response shape
+export interface ApiErrorResponse {
+  detail: string
+  error_code?: string
+  errors?: Record<string, string>
+  missing_fields?: string[]
+  field?: string
+  error?: string
+}
+
+export interface ApiError {
+  response?: {
+    status: number
+    data?: ApiErrorResponse
+  }
+  message?: string
+}
+
+// Helper to extract backend error info from an axios error
+export function getApiError(err: unknown): ApiErrorResponse & { status?: number } {
+  const axiosErr = err as ApiError
+  return {
+    detail: axiosErr.response?.data?.detail ?? (err instanceof Error ? err.message : 'Error inesperado'),
+    error_code: axiosErr.response?.data?.error_code,
+    error: axiosErr.response?.data?.error,
+    status: axiosErr.response?.status,
+  }
+}
+
 // API base configuration
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -552,7 +581,6 @@ export interface RoutineExercise {
   sets?: string
   reps?: string
   rest_seconds?: number
-  estimated_calories: number
   notes?: string
 }
 
@@ -563,7 +591,6 @@ export interface RoutineSession {
   day_label?: string
   color?: string
   session_duration_minutes?: number
-  estimated_calories_per_session: number
   exercises: RoutineExercise[]
 }
 
@@ -787,7 +814,7 @@ export interface DietIntakeData {
   disliked_foods: string
   budget_level: string
   cooking_time: string
-  meal_timing_preference: string
+  training_days: string[]
 }
 
 export interface DietGenerateRequest {
@@ -812,7 +839,6 @@ export interface DietFood {
 export interface DietMeal {
   id: string
   name: string
-  time: string
   foods: DietFood[]
   total_calories: number
   total_protein_g: number
@@ -850,6 +876,7 @@ export interface DietData {
   health_notes: string[]
   supplement_suggestions: string
   nutritional_summary: string
+  training_days?: string[]
 }
 
 export interface UserDietResponse {
@@ -860,6 +887,49 @@ export interface UserDietResponse {
   diet_data?: DietData
   intake_data?: Partial<DietIntakeData>
   error_message?: string
+  current_meal_index: number
+  current_meal_date?: string
+  daily_consumed?: Record<string, { calories: number; protein_g: number; carbs_g: number; fat_g: number }> | null
+}
+
+export interface DietLogMealRequest {
+  action: 'complete' | 'skip'
+}
+
+export interface DietLogMealResponse {
+  current_meal_index: number
+  current_meal_date: string | null
+  advanced: boolean
+}
+
+export interface DietModifyMealRequest {
+  day_type: 'training_day' | 'rest_day'
+  meal_id: string
+  action: 'add_food' | 'remove_food'
+  food?: DietFood
+  food_index?: number
+}
+
+export interface CurrentMealResponse {
+  day_type: 'training_day' | 'rest_day'
+  meal: DietMeal | null
+  meal_index: number
+  total_meals: number
+  is_last_meal: boolean
+  is_overridden: boolean
+}
+
+export interface MealAlternativeResponse {
+  meal: DietMeal
+  day_type: string
+  meal_index: number
+}
+
+export interface ApplyAlternativeRequest {
+  meal_index: number
+  day_type: string
+  scope: 'diet' | 'today'
+  meal: DietMeal
 }
 
 export const dietAPI = {
@@ -876,6 +946,30 @@ export const dietAPI = {
   edit: async (payload: DietEditRequest): Promise<UserDietResponse> => {
     const response = await api.post('/v1/diet/edit', payload)
     return response.data
+  },
+
+  getCurrentMeal: async (): Promise<CurrentMealResponse> => {
+    const response = await api.get('/v1/diet/current-meal')
+    return response.data
+  },
+
+  logMeal: async (payload: DietLogMealRequest): Promise<DietLogMealResponse> => {
+    const response = await api.post('/v1/diet/log-meal', payload)
+    return response.data
+  },
+
+  modifyMeal: async (payload: DietModifyMealRequest): Promise<UserDietResponse> => {
+    const response = await api.post('/v1/diet/modify-meal', payload)
+    return response.data
+  },
+
+  getMealAlternative: async (): Promise<MealAlternativeResponse> => {
+    const response = await api.post('/v1/diet/meals/alternative')
+    return response.data
+  },
+
+  applyMealAlternative: async (payload: ApplyAlternativeRequest): Promise<void> => {
+    await api.post('/v1/diet/meals/apply-alternative', payload)
   },
 }
 

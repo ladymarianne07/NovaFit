@@ -47,9 +47,9 @@ const SAMPLE_ROUTINE = {
         label: 'Full Body A',
         day_label: 'Lunes · Full Body A',
         title: 'Piernas + Empuje',
-        estimated_calories_per_session: 310,
+        session_duration_minutes: 60,
         exercises: [
-          { id: 'e1', name: 'Sentadilla', muscle: 'Cuádriceps', group: 'Piernas', sets: '3', reps: '12', rest_seconds: 90, estimated_calories: 50, notes: '' },
+          { id: 'e1', name: 'Sentadilla', muscle: 'Cuádriceps', group: 'Piernas', sets: '3', reps: '12', rest_seconds: 90, notes: '' },
         ],
       },
     ],
@@ -72,7 +72,7 @@ const MULTI_PHASE_ROUTINE = {
         exercises: [
           {
             id: 'e1', name: 'Sentadilla', muscle: 'Cuádriceps', group: 'Piernas',
-            estimated_calories: 50, notes: '',
+            notes: '',
           },
         ],
       },
@@ -162,7 +162,7 @@ describe('RoutineModule', () => {
     mockGetActive.mockResolvedValue(SAMPLE_ROUTINE)
     await act(async () => { renderModule() })
     expect(screen.getByText('Piernas + Empuje')).toBeInTheDocument()
-    expect(screen.getByText('310 kcal')).toBeInTheDocument()
+    expect(screen.getByText('350 kcal est.')).toBeInTheDocument()
   })
 
   test('"Reemplazar" button shown when routine exists', async () => {
