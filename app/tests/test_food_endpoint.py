@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from pytest import MonkeyPatch
 
 
-def test_parse_and_calculate_prefers_fatsecret_before_usda(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_prefers_fatsecret_before_usda(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.fatsecret_service import FatSecretFoodResult
 
@@ -29,7 +29,7 @@ def test_parse_and_calculate_prefers_fatsecret_before_usda(client: TestClient, m
     monkeypatch.setattr("app.services.food_service.search_fatsecret_food_by_name", fake_fatsecret_search)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "100 gramos de banana"},
     )
@@ -43,7 +43,7 @@ def test_parse_and_calculate_prefers_fatsecret_before_usda(client: TestClient, m
 
 
 def test_parse_and_calculate_falls_back_to_usda_when_fatsecret_fails(
-    client: TestClient,
+    authed_client: TestClient,
     monkeypatch: MonkeyPatch,
 ) -> None:
     from app.schemas.food import ParsedFoodPayload
@@ -71,7 +71,7 @@ def test_parse_and_calculate_falls_back_to_usda_when_fatsecret_fails(
     monkeypatch.setattr("app.services.food_service.search_fatsecret_food_by_name", fake_fatsecret_search)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "100 gramos de banana"},
     )
@@ -83,7 +83,7 @@ def test_parse_and_calculate_falls_back_to_usda_when_fatsecret_fails(
     assert data["total_calories"] == 88.0
 
 
-def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -104,7 +104,7 @@ def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(client: 
     monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_usda_search)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "me comi una banana mediana"},
     )
@@ -116,7 +116,7 @@ def test_parse_and_calculate_uses_parser_pipeline_without_fatsecret_nlp(client: 
     assert data["total_calories"] == 103.84
 
 
-def test_parse_and_calculate_returns_calories_and_macros(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_returns_calories_and_macros(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -137,7 +137,7 @@ def test_parse_and_calculate_returns_calories_and_macros(client: TestClient, mon
     monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "200 gramos de pechuga de pollo a la plancha"},
     )
@@ -159,7 +159,7 @@ def test_parse_and_calculate_returns_calories_and_macros(client: TestClient, mon
     assert data["total_fat"] == 6.0
 
 
-def test_parse_and_calculate_serving_uses_serving_size_for_macro_totals(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_serving_uses_serving_size_for_macro_totals(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -180,7 +180,7 @@ def test_parse_and_calculate_serving_uses_serving_size_for_macro_totals(client: 
     monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "2 porciones de arroz cocido"},
     )
@@ -195,7 +195,7 @@ def test_parse_and_calculate_serving_uses_serving_size_for_macro_totals(client: 
     assert data["total_fat"] == 0.72
 
 
-def test_parse_and_calculate_aggregates_multiple_foods(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_aggregates_multiple_foods(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -230,7 +230,7 @@ def test_parse_and_calculate_aggregates_multiple_foods(client: TestClient, monke
     monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "pollo 100 gramos y arroz 200 gramos"},
     )
@@ -246,7 +246,7 @@ def test_parse_and_calculate_aggregates_multiple_foods(client: TestClient, monke
     assert data["total_fat"] == 4.2
 
 
-def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_accepts_longer_input_text(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -269,7 +269,7 @@ def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monke
 
     long_text = " ".join(["avena con fruta y yogurt"] * 35)  # >500 chars
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": long_text},
     )
@@ -279,7 +279,7 @@ def test_parse_and_calculate_accepts_longer_input_text(client: TestClient, monke
     assert data["food"] == "oatmeal"
 
 
-def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(client: TestClient, monkeypatch: MonkeyPatch) -> None:
+def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(authed_client: TestClient, monkeypatch: MonkeyPatch) -> None:
     from app.schemas.food import ParsedFoodPayload
     from app.services.usda_service import USDAFoodResult
 
@@ -314,7 +314,7 @@ def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(clie
     monkeypatch.setattr("app.services.food_service.parse_food_input", fake_parse_food_input)
     monkeypatch.setattr("app.services.food_service.search_food_by_name", fake_search_food_by_name)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "cafe con leche"},
     )
@@ -329,7 +329,7 @@ def test_parse_and_calculate_decomposes_coffee_with_milk_and_uses_half_cups(clie
 
 
 def test_parse_and_calculate_applies_conservative_defaults_for_ambiguous_breakfast(
-    client: TestClient,
+    authed_client: TestClient,
     monkeypatch: MonkeyPatch,
 ) -> None:
     from app.schemas.food import ParsedFoodPayload
@@ -424,7 +424,7 @@ def test_parse_and_calculate_applies_conservative_defaults_for_ambiguous_breakfa
 
     monkeypatch.setattr("app.services.food_service.PortionResolverService.resolve_portion_grams", fake_resolve_portion_grams)
 
-    response = client.post(
+    response = authed_client.post(
         "/api/food/parse-and-calculate",
         json={"text": "sweetener, lactose-free milk, café, manteca, scrambled eggs, whole wheat toast"},
     )
@@ -436,3 +436,18 @@ def test_parse_and_calculate_applies_conservative_defaults_for_ambiguous_breakfa
     assert data["total_calories"] < 450.0
     assert data["total_protein"] < 30.0
     assert data["total_fat"] < 30.0
+
+
+def test_parse_and_calculate_requires_auth(client: TestClient) -> None:
+    """Trello card #4 — endpoint must reject anonymous requests."""
+    response = client.post(
+        "/api/food/parse-and-calculate",
+        json={"text": "100 gramos de banana"},
+    )
+    assert response.status_code == 401
+
+
+def test_search_multi_requires_auth(client: TestClient) -> None:
+    """Trello card #4 — endpoint must reject anonymous requests."""
+    response = client.get("/api/food/search-multi", params={"query": "banana"})
+    assert response.status_code == 401

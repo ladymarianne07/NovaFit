@@ -37,7 +37,7 @@ def client():
 def test_user_data():
     return {
         "email": "test@example.com",
-        "password": "testpassword123", 
+        "password": "testpassword123",
         "first_name": "Test",
         "last_name": "User",
         "gender": "male",
@@ -46,3 +46,20 @@ def test_user_data():
         "age": 25,
         "activity_level": 1.5
     }
+
+
+@pytest.fixture
+def authed_client(client, test_user_data):
+    """TestClient with a registered+logged-in user. The Bearer token is set
+    as a default header so endpoint calls behave as authenticated requests."""
+    client.post("/auth/register", json=test_user_data)
+    login = client.post(
+        "/auth/login",
+        json={
+            "email": test_user_data["email"],
+            "password": test_user_data["password"],
+        },
+    )
+    token = login.json()["access_token"]
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client

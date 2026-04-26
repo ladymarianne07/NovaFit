@@ -23,6 +23,7 @@ router = APIRouter(prefix="/food", tags=["food"])
 @router.post("/parse-and-calculate", response_model=FoodParseCalculateResponse)
 async def parse_and_calculate_food(
     payload: FoodParseRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_database_session),
 ):
     """Parse food text, resolve USDA calories, store entry, and return total calories."""
@@ -83,6 +84,7 @@ async def parse_and_calculate_food(
 @router.get("/search-multi")
 async def search_multi_source_food(
     query: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_database_session),
 ) -> list[FoodNormalized]:
     """
