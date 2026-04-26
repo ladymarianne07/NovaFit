@@ -78,15 +78,6 @@ async def get_current_user_profile(
     return current_user
 
 
-@router.get("/all", response_model=List[UserResponse])
-async def get_all_users(
-    user_service: UserService = Depends(get_user_service)
-):
-    """Get all users for development/testing purposes"""
-    # Note: In production, this should be restricted to admin users only
-    return user_service.get_all_users()
-
-
 @router.put("/me", response_model=UserResponse)
 async def update_current_user_profile(
     user_update: UserUpdate,

@@ -36,10 +36,6 @@ class UserService:
         """Get user by ID"""
         return self.db.query(User).filter(User.id == user_id).first()
     
-    def get_all_users(self) -> list[User]:
-        """Get all users (for admin/development purposes)"""
-        return self.db.query(User).all()
-    
     def create_user(self, user_data: UserCreate) -> User:
         """
         Create a new user with biometric data and calculations
