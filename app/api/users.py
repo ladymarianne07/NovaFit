@@ -201,20 +201,13 @@ async def update_user_objective(
     - Target daily calories (based on objective and TDEE)
     - Protein, fat, and carbohydrate targets (in grams)
     """
-    try:
-        updated_user = user_service.update_user_objective(
-            current_user,
-            objective_data.objective.value,
-            objective_data.aggressiveness_level
-        )
-        notification_service.notify_trainer_of_student_edit(current_user, "objective")
-        return updated_user
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update objective: {str(e)}"
-        )
+    updated_user = user_service.update_user_objective(
+        current_user,
+        objective_data.objective.value,
+        objective_data.aggressiveness_level,
+    )
+    notification_service.notify_trainer_of_student_edit(current_user, "objective")
+    return updated_user
 
 
 @router.put("/me/nutrition-targets", response_model=UserResponse)
