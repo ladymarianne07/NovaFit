@@ -74,7 +74,12 @@ def _build_diet_generation_prompt(
     if routine_data:
         sessions = routine_data.get("sessions", [])
         if sessions:
-            avg_kcal = sum(s.get("estimated_calories_per_session", 0) for s in sessions) / len(sessions)
+            # Server-computed via MET × weight × duration when the routine is
+            # generated/edited (Trello card #10). The Gemini prompt explicitly
+            # forbids per-session calorie estimates, so reading from sessions
+            # here used to silently produce 0; reading the persisted server
+            # estimate fixes that.
+            avg_kcal = float(routine_data.get("avg_kcal_per_training_session", 0) or 0)
             session_titles = [s.get("title", "") for s in sessions[:3]]
             routine_section = (
                 f"Rutina activa con {len(sessions)} sesiones de entrenamiento.\n"

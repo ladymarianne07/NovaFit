@@ -10,7 +10,8 @@ from datetime import date
 from typing import Any, cast
 
 import httpx
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..config import settings
 from ..constants import RoutineConstants, WorkoutConstants
@@ -20,7 +21,7 @@ from ..core.custom_exceptions import (
     RoutineNotFoundError,
     RoutineParsingError,
 )
-from ..db.models import UserRoutine, WorkoutSession
+from ..db.models import User, UserRoutine, WorkoutSession
 from ..services.workout_service import WorkoutService
 from ..templates.routine import ROUTINE_JSON_SCHEMA, ROUTINE_FILE_PARSE_PROMPT, ROUTINE_SYSTEM_PROMPT
 from .base_ai_generation_service import BaseAIGenerationService
@@ -174,12 +175,90 @@ class RoutineService(BaseAIGenerationService):
 
     @classmethod
     def _set_record_ready(cls, record: Any, *, raw_data: dict[str, Any], html: str) -> None:
+        # Inject server-computed avg_kcal_per_training_session before persisting.
+        # The Gemini prompt forbids generating per-session calorie estimates
+        # ("calorie calculations are handled server-side using MET formulas"),
+        # so this is where we honor that contract.
+        cls._inject_avg_kcal_per_training_session(record, raw_data)
+
         rd = cast(Any, record)
         rd.status = RoutineConstants.STATUS_READY
         rd.html_content = html
         rd.routine_data = raw_data
         rd.health_analysis = raw_data.get("health_analysis")
         rd.error_message = None
+
+    @classmethod
+    def _inject_avg_kcal_per_training_session(
+        cls, record: Any, raw_data: dict[str, Any]
+    ) -> None:
+        """Write avg_kcal_per_training_session into raw_data using the user's weight."""
+        db = object_session(record)
+        if db is None:
+            return
+        user_id = getattr(cast(Any, record), "user_id", None)
+        if user_id is None:
+            return
+        user = db.query(User).filter(User.id == user_id).first()
+        weight_kg = float(getattr(user, "weight_kg", 0) or 0) if user else 0.0
+        raw_data["avg_kcal_per_training_session"] = (
+            cls._compute_avg_kcal_per_training_session(
+                db, routine_data=raw_data, weight_kg=weight_kg
+            )
+        )
+
+    @classmethod
+    def _compute_avg_kcal_per_training_session(
+        cls,
+        db: Session,
+        *,
+        routine_data: dict[str, Any],
+        weight_kg: float,
+    ) -> float:
+        """Average MET-based kcal across all training sessions in the routine.
+
+        Uses the same `fuerza_general` activity (medium intensity, correction
+        factor 1.0) that `log_session` uses for live workouts via
+        `_calc_routine_kcal`. This ensures the diet's training-day estimate
+        and the user's logged session estimate agree when the user follows
+        the plan as-is. Returns 0.0 if weight is missing or no sessions.
+        """
+        if not weight_kg or weight_kg <= 0:
+            return 0.0
+
+        sessions = routine_data.get("sessions") or []
+        if not sessions:
+            return 0.0
+
+        total_kcal = 0.0
+        counted = 0
+        for session in sessions:
+            exercises = session.get("exercises", []) if isinstance(session, dict) else []
+            try:
+                duration = int(session.get("session_duration_minutes", 60))
+            except (TypeError, ValueError):
+                duration = 60
+            try:
+                base_kcal, _ = cls._calc_routine_kcal(
+                    db,
+                    exercises=exercises,
+                    skipped_ids=[],
+                    session_duration_minutes=duration,
+                    weight_kg=float(weight_kg),
+                )
+                total_kcal += base_kcal
+                counted += 1
+            except Exception as exc:
+                logger.warning(
+                    "Failed to compute kcal for session %s: %s",
+                    session.get("id") if isinstance(session, dict) else "?",
+                    exc,
+                )
+                continue
+
+        if counted == 0:
+            return 0.0
+        return round(total_kcal / counted, 2)
 
     @classmethod
     def _set_record_error(cls, record: Any, *, error_message: str) -> None:
@@ -266,18 +345,10 @@ class RoutineService(BaseAIGenerationService):
         try:
             raw_data = cls._call_gemini_file(file_bytes, mime_type)
             html = cls._generate_html(raw_data)
-
-            rd = cast(Any, routine)
-            rd.status = RoutineConstants.STATUS_READY
-            rd.html_content = html
-            rd.routine_data = raw_data
-            rd.health_analysis = raw_data.get("health_analysis")
-            rd.error_message = None
+            cls._set_record_ready(routine, raw_data=raw_data, html=html)
         except Exception as exc:
             logger.exception("Failed to parse routine for user_id=%s", user_id)
-            rd = cast(Any, routine)
-            rd.status = RoutineConstants.STATUS_ERROR
-            rd.error_message = str(exc)
+            cls._set_record_error(routine, error_message=str(exc))
 
         db.commit()
         db.refresh(routine)
@@ -288,7 +359,12 @@ class RoutineService(BaseAIGenerationService):
 
     @classmethod
     def get_active_routine(cls, db: Session, *, user_id: int) -> UserRoutine:
-        """Return the user's active routine or raise RoutineNotFoundError."""
+        """Return the user's active routine or raise RoutineNotFoundError.
+
+        Backfills `avg_kcal_per_training_session` for routines created before
+        Trello card #10 — older rows lack the field, so the first GET after
+        the upgrade fills and persists it. Idempotent on subsequent reads.
+        """
         routine = (
             db.query(UserRoutine)
             .filter(UserRoutine.user_id == user_id)
@@ -296,6 +372,21 @@ class RoutineService(BaseAIGenerationService):
         )
         if routine is None:
             raise RoutineNotFoundError("No active routine found.")
+
+        rd = cast(Any, routine)
+        routine_data = rd.routine_data or {}
+        needs_backfill = (
+            rd.status == RoutineConstants.STATUS_READY
+            and routine_data.get("sessions")
+            and "avg_kcal_per_training_session" not in routine_data
+        )
+        if needs_backfill:
+            cls._inject_avg_kcal_per_training_session(routine, routine_data)
+            rd.routine_data = routine_data
+            flag_modified(routine, "routine_data")
+            db.commit()
+            db.refresh(routine)
+
         return routine
 
     # ── Session logging ───────────────────────────────────────────────────────
