@@ -1,42 +1,32 @@
-# NovaFitness — Claude Instructions
+# NovaFitness — Pointer
 
-## Before writing any code
+> Claude Code auto-carga este archivo al iniciar sesión. Es deliberadamente corto.
+> El contenido vivo de instrucciones está bajo `docs/`.
 
-1. Read `BACKEND_GUIDELINES.md` before making any backend changes (FastAPI, services, schemas, models).
-2. Read `FRONTEND_GUIDELINES.md` before making any frontend changes (React, TypeScript, CSS).
+## Antes de tocar código, leer en este orden
 
-## Backend testing requirements
+1. [`docs/DAILY_CODE.md`](docs/DAILY_CODE.md) — flujo diario (rama, loop Trello, política de QA)
+2. [`docs/CLAUDE_INSTRUCTIONS.md`](docs/CLAUDE_INSTRUCTIONS.md) — qué cargar y reglas operativas
 
-Every new backend feature must include tests before the task is considered done:
+## Mapa rápido
 
-- **Unit tests** — test each service method in isolation (see `BACKEND_GUIDELINES.md` → Testing Guidelines)
-- **Integration tests** — test the full request/response cycle through the API endpoints
-- Tests go in `app/tests/` following the existing naming pattern (e.g. `test_trainer_e2e.py`)
-- Aim to cover: happy path, validation errors, authorization checks, and edge cases
+| Necesito… | Voy a… |
+|---|---|
+| Entender la arquitectura | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) + [`docs/ARCHITECTURE_DIAGRAM.md`](docs/ARCHITECTURE_DIAGRAM.md) |
+| Convenciones del backend | [`docs/BACKEND_GUIDELINES.md`](docs/BACKEND_GUIDELINES.md) |
+| Patrones de testing | [`docs/TESTING.md`](docs/TESTING.md) |
+| Manejo de errores | [`docs/ERROR_HANDLING.md`](docs/ERROR_HANDLING.md) |
+| Glosario de dominio | [`docs/DOMAIN_GLOSSARY.md`](docs/DOMAIN_GLOSSARY.md) |
+| Invariantes numéricas (la propuesta de valor) | [`docs/NUMERIC_RELIABILITY.md`](docs/NUMERIC_RELIABILITY.md) |
+| ADRs (decisiones no obvias) | [`docs/DECISIONS.md`](docs/DECISIONS.md) |
+| Estado del refactor heredado | [`docs/REFACTOR_PLAN.md`](docs/REFACTOR_PLAN.md) |
+| Setup local / deploy | [`docs/operacion/DEPLOYMENT.md`](docs/operacion/DEPLOYMENT.md) |
 
-## Frontend testing requirements
+Frontend: convenciones siguen en [`FRONTEND_GUIDELINES.md`](FRONTEND_GUIDELINES.md) (root, fuera del scope de `docs/` por ahora).
 
-Every new frontend feature must include tests before the task is considered done:
+## Reglas de oro (extracto)
 
-- **Integration tests** — test the component renders correctly and behaves as expected (see `FRONTEND_GUIDELINES.md` → Component Testing Guidelines)
-- Tests go in `frontend/src/tests/` following the existing naming pattern (e.g. `ComponentName.integration.test.tsx`)
-- Aim to cover: correct rendering, user interactions, loading/error states, and role-based visibility where applicable
-- Mock API calls and context providers as needed (follow the pattern in existing test files)
-
-## After completing any feature or fix
-
-Run the full regression suite and fix any failures before considering the task done:
-
-```bash
-# Backend
-cd "c:\Users\Maru\OneDrive\Escritorio\NovaFitness" && python -m pytest app/tests/ -q
-
-# Frontend
-cd "c:\Users\Maru\OneDrive\Escritorio\NovaFitness\frontend" && npx jest --passWithNoTests
-```
-
-If a test fails due to your changes, fix it before finishing. Pre-existing failures (documented below) are exempt.
-
-### Known pre-existing test failures (do NOT fix unless explicitly asked)
-
-- `frontend/src/tests/Login.regression.test.tsx` — looks for `.animate-spin` CSS class that no longer exists in the codebase. Confirmed pre-existing via git history.
+- Trabajo activo va a `refactor-2026-04-26-WIP`. `main` solo recibe merges vía PR.
+- Tras cualquier cambio de código relevante, **diff contra los docs**: si divergen, pausar y preguntar a la usuaria cuál es ground truth.
+- Ante ambigüedad, **NUNCA asumir**: pausar y preguntar.
+- Política de tests: skip suite completa cuando no se toca core (override del 2026-04-26 — detalle en `DAILY_CODE.md`).

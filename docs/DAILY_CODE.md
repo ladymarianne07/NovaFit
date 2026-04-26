@@ -80,10 +80,11 @@ Usar el MCP de Trello (`add_card_to_list`) para crearla directamente.
 
 Antes de proponer "una mejor forma" para algo, **verificar primero** si choca con:
 
-- `audit_reports/resumen.md` (rama `refactor-2026-04-26-WIP`) — define el plan de refactor con prioridades P1–P4
-- `BACKEND_GUIDELINES.md` — convenciones del backend
-- `FRONTEND_GUIDELINES.md` — convenciones del frontend
-- `ARCHITECTURE.md`, `ARCHITECTURE_DIAGRAM.md` (rama WIP) — arquitectura macro
+- [`docs/REFACTOR_PLAN.md`](REFACTOR_PLAN.md) — estado actual del plan P1–P4 heredado del audit del 2026-04-04
+- [`docs/BACKEND_GUIDELINES.md`](BACKEND_GUIDELINES.md) — convenciones del backend
+- [`FRONTEND_GUIDELINES.md`](../FRONTEND_GUIDELINES.md) — convenciones del frontend (sigue en root, fuera del scope de docs/)
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md), [`docs/ARCHITECTURE_DIAGRAM.md`](ARCHITECTURE_DIAGRAM.md) — arquitectura macro
+- [`docs/DECISIONS.md`](DECISIONS.md) — ADRs de decisiones no obvias
 - Las cards ya creadas en Trello (otras pueden depender de la estructura actual)
 
 Si el plan documentado tiene un trade-off mejor, **primero consultar a la usuaria** antes de cambiar el rumbo.
@@ -103,8 +104,17 @@ Si el plan documentado tiene un trade-off mejor, **primero consultar a la usuari
 
 ## Referencias
 
-- `CLAUDE.md` — instrucciones del proyecto para Claude Code (en rama WIP)
-- `ARCHITECTURE.md` — arquitectura macro (en rama WIP)
-- `audit_reports/resumen.md` — plan de refactor con checklist P1–P4 (en rama WIP)
-- `BACKEND_GUIDELINES.md` / `FRONTEND_GUIDELINES.md` — convenciones por capa
+Todo lo backend vive bajo `docs/`. Para navegar, leer [`docs/README.md`](README.md). Highlights:
+
+- [`docs/CLAUDE_INSTRUCTIONS.md`](CLAUDE_INSTRUCTIONS.md) — qué leer al arrancar una sesión y política de QA
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) + [`docs/ARCHITECTURE_DIAGRAM.md`](ARCHITECTURE_DIAGRAM.md) — arquitectura macro
+- [`docs/BACKEND_GUIDELINES.md`](BACKEND_GUIDELINES.md) — convenciones backend
+- [`docs/REFACTOR_PLAN.md`](REFACTOR_PLAN.md) — estado del plan de refactor
+- [`docs/ERROR_HANDLING.md`](ERROR_HANDLING.md) — contrato de errores
+- [`docs/TESTING.md`](TESTING.md) — convenciones de tests
+- [`docs/DOMAIN_GLOSSARY.md`](DOMAIN_GLOSSARY.md) — términos del dominio
+- [`docs/NUMERIC_RELIABILITY.md`](NUMERIC_RELIABILITY.md) — invariantes numéricas
+- [`docs/DECISIONS.md`](DECISIONS.md) — ADRs
+- `CLAUDE.md` (root) — pointer mínimo (Claude Code lo auto-carga)
+- `FRONTEND_GUIDELINES.md` (root) — convenciones frontend, fuera del scope de docs/ por ahora
 - Memoria persistente en `~/.claude/projects/d--NovaFitness/memory/`

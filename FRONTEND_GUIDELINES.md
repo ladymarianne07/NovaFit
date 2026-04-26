@@ -207,7 +207,7 @@ useEffect(() => {
 > In **development**, Vite's dev proxy (`vite.config.ts`) intercepts `/api/*` and forwards to `http://localhost:8000/*`, stripping the prefix — the backend sees `/v1/...`.
 > In **production** (built PWA), there is no proxy. The request reaches the backend as `/api/v1/...`.
 >
-> **Consequence for backend developers:** Any FastAPI router whose `APIRouter` uses a `/v1/` prefix must be mounted twice in `main.py` — once without prefix and once with `prefix="/api"`. See `BACKEND_GUIDELINES.md → Register Router` for details.
+> **Consequence for backend developers:** Any FastAPI router whose `APIRouter` uses a `/v1/` prefix must be mounted twice in `main.py` — once without prefix and once with `prefix="/api"`. See [`docs/BACKEND_GUIDELINES.md`](docs/BACKEND_GUIDELINES.md) → "Dual-path registration of /v1/ routers" for details.
 
 ```typescript
 // ✅ Create configured axios instance
