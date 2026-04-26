@@ -78,15 +78,6 @@ async def get_current_user_profile(
     return current_user
 
 
-@router.get("/all", response_model=List[UserResponse])
-async def get_all_users(
-    user_service: UserService = Depends(get_user_service)
-):
-    """Get all users for development/testing purposes"""
-    # Note: In production, this should be restricted to admin users only
-    return user_service.get_all_users()
-
-
 @router.put("/me", response_model=UserResponse)
 async def update_current_user_profile(
     user_update: UserUpdate,
@@ -210,20 +201,13 @@ async def update_user_objective(
     - Target daily calories (based on objective and TDEE)
     - Protein, fat, and carbohydrate targets (in grams)
     """
-    try:
-        updated_user = user_service.update_user_objective(
-            current_user,
-            objective_data.objective.value,
-            objective_data.aggressiveness_level
-        )
-        notification_service.notify_trainer_of_student_edit(current_user, "objective")
-        return updated_user
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update objective: {str(e)}"
-        )
+    updated_user = user_service.update_user_objective(
+        current_user,
+        objective_data.objective.value,
+        objective_data.aggressiveness_level,
+    )
+    notification_service.notify_trainer_of_student_edit(current_user, "objective")
+    return updated_user
 
 
 @router.put("/me/nutrition-targets", response_model=UserResponse)

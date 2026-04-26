@@ -125,3 +125,16 @@ novafitness.db
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code — local-only tooling, secrets, and per-machine state.
+# Decision (2026-04-26, Trello card #2): gitignore entire .claude/ rather
+# than tracking it selectively. Solo dev, no team sharing concern. Contents:
+#   - settings.local.json: contains secrets (Trello token, etc.)
+#   - worktrees/: per-machine isolated agent working copies
+#   - any hooks/agents/skills added later stay personal until explicitly shared
+# If ever sharing tooling with a team, lift this rule selectively.
+.claude/
+
+# MCP server config — env block holds secrets (e.g. Trello API token).
+# Track template separately as .mcp.json.example if/when sharing is needed.
+.mcp.json
