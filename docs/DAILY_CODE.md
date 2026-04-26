@@ -4,6 +4,14 @@
 
 ---
 
+## Estrategia de ramas
+
+- **`main`** = código estable que se deploya a producción. Solo recibe merges desde `refactor-2026-04-26-WIP` vía PR cuando un grupo de cards está listo y testeado.
+- **`refactor-2026-04-26-WIP`** = rama de desarrollo activo. **Todos los commits del sprint van acá.** Tiene la base de `main` + el refactor parcial heredado del 2026-04-04 que se va a ir fixeando card por card.
+- Antes de empezar a trabajar, asegurarse de estar parada en WIP: `git branch --show-current` debe devolver `refactor-2026-04-26-WIP`. Si no, `git switch refactor-2026-04-26-WIP`.
+
+---
+
 ## Loop de trabajo
 
 1. **Leer el tablero Trello** → https://trello.com/b/U72EdES8/novafitness
