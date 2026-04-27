@@ -99,45 +99,55 @@
 
 ---
 
-## #5 — Doble accumulator de macros consumidos (`DailyNutrition` + `UserDiet.daily_consumed`)
+## #5 — `DailyNutrition` como single source of truth de macros consumidos; `UserDiet.completed_meals` como flags
 
-**Decision:** Hoy las calorías y macros consumidas por día se acumulan en **dos lugares simultáneamente**: la tabla `DailyNutrition` y el JSON `UserDiet.daily_consumed`.
+**Decision:** Los macros consumidos por día se persisten **solamente** en la tabla `DailyNutrition`. El plan-tracking ("¿qué comidas del plan completé hoy?") usa flags en `UserDiet.completed_meals` (sin números). Reemplaza el ex-campo `daily_consumed` que tenía macros duplicados.
 
-**Status:** ⚠ **Conocida como problemática.** Card #7 del Backlog define la single source of truth.
+**Status:** ⚠ Pendiente de implementación. **Card #7 implementa.**
 
-**Date:** Heredada. Decisión a tomar formalmente en Card #7.
+**Date:** Confirmada 2026-04-26.
 
-**Why (intent original, parcialmente extrapolado):**
-- `DailyNutrition` (tabla SQL) — query rápido para el dashboard ("¿cuántos kcal llevo hoy?").
-- `UserDiet.daily_consumed` (JSON) — flexibilidad para cargar el JSON entero del diet activo y mostrar progreso por comida del plan.
+**Why:**
+- La duplicación entre `DailyNutrition` (tabla) y `UserDiet.daily_consumed` (JSON) producía drift: `delete_meal` y free-text logging solo escribían en `DailyNutrition`. Después de cualquier delete o log libre, los dos números divergían.
+- La feature útil de `daily_consumed` ("¿qué del plan completé?") se mantiene con flags por meal_index. Los macros se reconstruyen en runtime desde el plan + overrides + flags si el frontend los necesita.
+- Single source of truth elimina la posibilidad de drift por construcción.
+
+**Estructura nueva:**
+```json
+"completed_meals": {
+  "2026-04-26": [0, 2, 4]    // índices del array meals del plan
+}
+```
 
 **Trade-offs:**
-- ❌ Drift entre las dos fuentes. Confirmado: `delete_meal` y free-text logging solo tocan `DailyNutrition`.
-- ❌ Doble escritura → más oportunidades de bug.
-- ✅ Lectura del dashboard puede ser de un solo query SQL en vez de JSON parsing.
+- ❌ Frontend tiene que computar "macros del plan completado" en runtime si quiere mostrar "completaste X kcal del plan hoy". Es trivial: `sum(plan.meals[i] for i in completed_meals[today])` con override-handling.
+- ❌ Pérdida histórica del `daily_consumed` viejo (la usuaria confirmó que no necesita migración — DB se reseteará para testing).
+- ✅ Drift imposible. Una sola escritura por meal-completion.
+- ✅ Más limpio para entender ("¿cuánto comí hoy?" → DailyNutrition; "¿qué del plan?" → flags).
 
-**Sugerencia para Card #7:** `DailyNutrition` queda como single source of truth para macros. `UserDiet.daily_consumed` se reduce a un flag por meal_index — `{date: {meal_index: True}}` — sin números, solo estado de completion. Pendiente confirmar.
-
-**Re-revisita si...** Card #7 se cierra (lo cual debería pasar pronto).
+**Re-revisita si...** descubrimos un caso de uso que requiere el desglose de macros por meal completado en el storage (en lugar de runtime). Hoy ese caso no existe.
 
 ---
 
-## #6 — `Settings` con `extra=forbid` (heredado por default de pydantic-settings)
+## #6 — `Settings` con `extra="ignore"` (cambia desde el default original `forbid`)
 
-**Decision:** `app/config.py:Settings` no setea `extra` explícitamente; pydantic-settings default es `forbid`. Resultado: cualquier env var fuera de las declaradas hace fallar el startup.
+**Decision:** `app/config.py:Settings` usa `model_config = SettingsConfigDict(extra="ignore")` para tolerar env vars no declaradas.
 
-**Status:** ⚠ **A cambiar.** Card #35 del Backlog.
+**Status:** ⚠ Pendiente de implementación. **Card #35 implementa.**
 
-**Date:** Heredada (default de la librería).
+**Date:** Confirmada 2026-04-26 (anterior comportamiento `forbid` superseded).
 
-**Why (intent inferido):**
-- Detectar typos en `.env` temprano. Si pongo `DATABSE_URL` en lugar de `DATABASE_URL`, el `forbid` lo agarra.
+**Why:**
+- El default `forbid` de pydantic-settings hace fallar el startup si el `.env` o el shell tienen alguna env var no declarada. En Card #3 esto rompió pytest entero porque alguien (probablemente otra sesión de Claude) pegó `TRELLO_API_KEY=...` en `.env` por error.
+- El backend no debería caerse por contaminación del entorno de otro proyecto vecino.
+- En deploy, plataformas como Render setean vars adicionales (`PORT`, `RENDER_*`) que no son del backend.
 
 **Trade-offs:**
-- ❌ Cualquier env var de OTRO proyecto en el shell rompe pytest (descubierto en Card #3 cuando un `TRELLO_API_KEY=...` espurio en `.env` hizo crashear toda la suite).
-- ❌ Si en deploy se setean vars adicionales (ej: por la plataforma), el backend no arranca.
+- ❌ Pierdes detección automática de typos en variables declaradas. Mitigación: agregar un test que verifique que el `.env` real tiene las variables que `Settings` espera.
+- ✅ Robusto contra contaminación.
+- ✅ Compatible con plataformas de deploy que setean vars extra.
 
-**Decisión sugerida en Card #35:** cambiar a `extra="ignore"` (estándar de apps que pueden recibir env vars de productos vecinos). Si queremos seguir cazando typos en VARIABLES DECLARADAS, podemos validar con un test que verifique el contenido del `.env`.
+**Re-revisita si...** descubrimos casos donde la tolerancia a vars extra esconde un bug real (ej: typo en variable crítica). En ese caso, considerar `extra="allow"` para permitir lectura via `model_extra`, o reforzar el test de `.env`.
 
 ---
 
@@ -162,29 +172,100 @@
 
 ---
 
-## TBDs (decisiones por confirmar)
+## #8 — Trackear fibra como cuarto macro
 
-> ⚠ Cada uno de estos requiere tu decisión cuando puedas leer la doc completa. Cuando confirmes uno, lo movemos arriba como ADR formal.
+**Decision:** El modelo nutricional incluye **fibra dietética como 4to macro** junto a proteína, carbs, grasa. Schemas, modelos, USDA/FatSecret integration y user targets se extienden para incluirla.
 
-### TBD-A — ¿Migrar `Settings` a `extra="ignore"` (Card #35)?
+**Status:** ⚠ Pendiente de implementación. **Card #38 implementa.**
 
-Sugerencia: sí. Reduce fricción de dev y deploy sin perder nada significativo (typo detection se cubre con un test).
+**Date:** 2026-04-26.
 
-### TBD-B — ¿`UserDiet.daily_consumed` se reduce a flags de completion (Card #7)?
+**Why:**
+- USDA y FatSecret miden las calorías de un alimento descontando la fibra (Atwater modificado: ~2 kcal/g para fibra, no 4). El cálculo `4·prot + 4·carbs + 9·fat` que usamos hoy infla las calorías ~10% en alimentos con fibra moderada/alta.
+- Sin fibra explícita, el invariante I-2 (suma de macros = calorías) **no se puede satisfacer** sin sacrificar la fidelidad biológica. Recalcular desde macros mintiéndole al usuario sobre la fibra es peor que aceptar inconsistencia visible.
+- Track de fibra es estándar en apps fitness modernas (MyFitnessPal, Cronometer, MacroFactor). Permite features adicionales: objetivos de fibra, dietas keto con net carbs, alertas de bajo intake.
 
-Sugerencia: sí. Single source of truth = `DailyNutrition`. Confirmar antes de implementar.
+**Implementación (Card #38):**
+- `USDAFoodResult`, `FatSecretFoodResult`, `FoodNormalized`, `ParsedFoodPayload` → agregar `fiber_per_100g` (default 0 si fuente no provee)
+- `FoodEntry` → columna `fiber_g`
+- `DailyNutrition` → columna `fiber_consumed`
+- `User` → columna `fiber_target_g`
+- `BiometricService` → calcular fiber target (default: 14 g por cada 1000 kcal según USDA recommendations)
+- Diet generation prompt → incluir fibra como objetivo
 
-### TBD-C — ¿Reglas de redondeo formalizar?
+**Trade-offs:**
+- ❌ Cambios en schemas + DB + UI (esfuerzo concentrado, ~2-3 días).
+- ❌ Si una fuente externa no provee fibra (raro), default 0 puede ser inexacto.
+- ✅ Calorías biológicamente correctas (USDA directo) + invariante I-2 satisfecho.
+- ✅ Habilita features futuras de fibra/keto/digestión.
+- ✅ La app pasa de "trackeo de macros" a "trackeo serio de macros + fibra" — refuerzo del diferenciador.
 
-Ver `NUMERIC_RELIABILITY.md` TBD-1 a TBD-3.
+**Invariante I-2 con fibra:**
+```
+4 · prot + 4 · (carbs - fiber) + 2 · fiber + 9 · fat  ≈  calories  ± 1 kcal
+```
 
-### TBD-D — ¿Política de macro priority FatSecret > USDA > OFF (Card frente a NUMERIC_RELIABILITY TBD-5)?
+**Re-revisita si...** descubrimos un trade-off no anticipado. Card #38 incluye smoke tests para verificar que I-2 se cumple en tres alimentos índice (banana, lentejas, manzana) post-implementación.
 
-Confirmar.
+---
 
-### TBD-E — ¿auto-recompute `avg_kcal_per_training_session` cuando cambia el peso del usuario?
+## #9 — Redondeo entero universal en outputs visibles
 
-Hoy no se hace. Si el usuario sube/baja >2 kg, el avg de la rutina activa queda obsoleto. Card pendiente para decidir si auto-recompute en `update_user_biometrics` o esperar al próximo edit de rutina.
+**Decision:** Todo número numérico **visible al usuario** (calorías, macros en gramos) se redondea a **entero**, sin decimales. Cantidades intermedias no visibles (MET window, correction_factor) mantienen decimales.
+
+**Status:** ⚠ Pendiente de implementación parcial. **Card #39 implementa.**
+
+**Date:** 2026-04-26.
+
+**Why:**
+- Decimales en outputs visibles agregan ruido sin valor: "1850.5 kcal" vs "1851 kcal" no cambia la decisión del usuario, pero confunde.
+- Consistencia: hoy hay redondeos arbitrarios entre módulos (1 decimal en BMR, 2 en macros consumidos, entero en target_calories). Unificar simplifica.
+- El invariante I-1 (rebalanceo de carbs) ya funciona mejor con enteros porque los redondeos son determinísticos por bloque.
+
+**Trade-offs:**
+- ❌ Cambios en múltiples services + tests (auditoría de `round(x, N)` en el codebase).
+- ❌ Cambios pequeños de UI (algunos componentes mostrarán "350" en lugar de "350.5").
+- ✅ Output uniforme.
+- ✅ Tests más simples (no `pytest.approx` para validar visibles).
+
+**Excepción**: cantidades intermedias del cálculo físico mantienen decimales:
+- MET window (`met_used_min`, `met_used_max`): 3 decimales
+- `correction_factor`: 3 decimales
+
+**Re-revisita si...** recibimos feedback de usuarios pidiendo precisión decimal en algún campo específico (ej: "yo controlo mi proteína al 0.5 g"). Hoy no es el caso.
+
+---
+
+## #10 — Auto-recompute al cambiar peso/biometricos
+
+**Decision:** Cuando `update_user_biometrics` cambia el peso del usuario en **más de 2 kg**, se dispara recálculo automático de campos derivados que usen peso:
+
+- `User.bmr_bpm`, `User.daily_caloric_expenditure`, `User.target_calories` y los `*_target_g` (esto **ya existe** vía `BiometricService.update_user_biometrics_with_recalculation`).
+- **NUEVO:** `UserRoutine.routine_data["avg_kcal_per_training_session"]` para la rutina activa del usuario, si la hay.
+
+**Status:** ⚠ Pendiente de implementación parcial. **Card #40 implementa la parte de routine.**
+
+**Date:** 2026-04-26.
+
+**Why:**
+- El usuario tiene la expectativa razonable de que "si actualizo mi peso, todos mis números se actualizan". El patrón ya existe para targets nutricionales — extenderlo a la rutina cierra el círculo.
+- Sin esto, el `avg_kcal` queda obsoleto silenciosamente: para María (peso 65 → 60 kg), su dieta de día de entreno seguiría dándole +358 kcal extras cuando su realidad serían +330 kcal. Pequeño pero suma con el tiempo.
+
+**Threshold de 2 kg:**
+- Cambios <2 kg suelen ser fluctuación normal (agua, fibra, etc.) — no merecen recalc constante.
+- 2 kg representa ~5% de cambio en kcal estimadas (linear en peso) — perceptible.
+
+**Lo que NO se auto-recalcula:**
+- **Diet plan (`UserDiet.diet_data`)** — el plan de comidas en sí (lo que Gemini generó) NO se regenera automáticamente. Sería un Gemini call costoso que el usuario podría no querer (le cambiaría todas las comidas). Los **targets** sí se actualizan (vía la cadena existente), pero las **comidas específicas** del plan no.
+- Para regenerar el plan de comidas, el usuario tiene que invocar explícitamente `POST /v1/diet/generate` (ya existe).
+
+**Trade-offs:**
+- ❌ Más código path para testear. Si el recálculo de routine.avg_kcal falla silenciosamente, el problema reaparece.
+- ❌ Pequeña latencia adicional en `update_user_biometrics` (un cálculo más).
+- ✅ "Just works" desde el punto de vista del usuario.
+- ✅ Threshold evita ruido por fluctuaciones.
+
+**Re-revisita si...** descubrimos que 2 kg es muy bajo (mucho recalc) o muy alto (la dieta queda obsoleta). Ajustar threshold via `WorkoutConstants.WEIGHT_CHANGE_RECOMPUTE_THRESHOLD_KG`.
 
 ---
 
@@ -194,4 +275,4 @@ Hoy no se hace. Si el usuario sube/baja >2 kg, el avg de la rutina activa queda 
 2. Escribir un ADR siguiendo el formato de arriba: Decision, Status, Date, Why, Trade-offs, Re-revisita si...
 3. Numerar consecutivamente (`#NN`).
 4. Si la decisión cambia con el tiempo, **agregar un nuevo ADR** que la supere y marcar el anterior como `Superseded by #MM`.
-5. Si la decisión está pendiente, agregarla en la sección "TBDs" hasta que se confirme.
+5. Si la decisión está pendiente de implementación, marcar Status como ⚠ con la card correspondiente.

@@ -68,11 +68,16 @@
 | Item | Origen | Estado | Card Trello |
 |---|---|---|---|
 | `Settings` rechaza env vars extra y rompe pytest | Card #3 (descubrimiento lateral) | ❌ Pendiente | #35 |
+| Reorganizar docs bajo `docs/` (Fase A) | Audit docs 2026-04-26 | ✅ Hecho | #36 |
+| Llenar gaps de docs (Fase B) | Audit docs 2026-04-26 | ✅ Hecho | #37 |
 | Estrategia de prefijos `/api` `/v1/` (doble registro) | Card #1 mapping (regresión del refactor) | ❌ Pendiente | #6 |
 | Frontend kcal hardcoded a 70 kg | Mapeo inicial 2026-04-26 | ❌ Pendiente | (sin card aún — crear cuando arranque frontend nuevo) |
-| Dual fuente de verdad `UserDiet.daily_consumed` vs `DailyNutrition` | Mapeo inicial | ❌ Pendiente | #7 |
+| Dual fuente de verdad → `daily_consumed` reemplazado por `completed_meals` | Mapeo inicial + investigación 2026-04-26 | ❌ Pendiente (scope refinado) | #7 |
 | `DailyNutrition.targets` no se actualiza en cambios | Mapeo inicial | ❌ Pendiente | #8 |
-| Invariante `4·p + 4·c + 9·f = target_calories` ± rounding | Mapeo inicial | ❌ Pendiente | #9 |
+| Invariante `4·p + 4·c + 9·f = target_calories` con rebalanceo (carbs absorbe diferencia) | Mapeo inicial + decisión TBD-2 | ❌ Pendiente | #9 |
+| Trackear fibra como cuarto macro (mantiene I-2 con USDA directa) | Decisión 2026-04-26 ADR #8 | ❌ Pendiente | #38 |
+| Redondear todos los outputs visibles a entero | Decisión 2026-04-26 ADR #9 | ❌ Pendiente | #39 |
+| Auto-recompute `avg_kcal_per_training_session` al cambiar peso (>2 kg) | Decisión 2026-04-26 ADR #10 | ❌ Pendiente | #40 |
 
 ---
 
